@@ -8,6 +8,7 @@ from wellops.settings import settings
 from wellops.substrate import ingest
 
 TODAY = date(2026, 10, 17)
+settings.rag_embed = False  # no embedding calls from tests; test_rag installs a fake embedder
 
 
 @pytest.fixture(scope="session")

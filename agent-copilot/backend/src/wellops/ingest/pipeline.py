@@ -106,6 +106,12 @@ def ingest_file(path: str | Path, filename: str | None = None, principal: str = 
                                warnings=[f"supported: {sorted(TABLE_EXT | DOC_EXT | set(IMAGE_EXT))}"])
     except Exception as e:  # a bad upload is a report, never a crash
         rep = IngestReport(file=filename, kind="error", summary=f"Could not ingest {filename}", warnings=[f"{type(e).__name__}: {e}"[:400]])
+    if rep.kind in ("known_table", "document", "manual", "image"):  # new docs/notes/captions become searchable now
+        try:
+            from wellops import rag
+            rag.reindex(db, DS)
+        except Exception as e:  # the upload itself succeeded; search catches up on the next reindex
+            rep.warnings.append(f"knowledge index not refreshed: {type(e).__name__}: {e}"[:300])
     db.run("INSERT INTO ingest_log VALUES (?,?,?,?,?,?,?)", [uuid.uuid4().hex[:12], datetime.now(timezone.utc), principal,
                                                             chat_id, filename, rep.kind, rep.model_dump_json()])
     return rep

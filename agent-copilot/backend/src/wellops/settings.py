@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     hermes_provider: str = "gemini"  # gemini (Google OpenAI-compatible endpoint)
     hermes_model: str = ""  # default per provider below
+    rag_embed: bool = True  # dense layer of search_knowledge (Gemini embeddings); False = BM25 only
+    rag_embed_model: str = "gemini-embedding-001"
+    rag_embed_dims: int = 768
+    rag_embed_max: int = 4000  # new chunks embedded per reindex (the rest wait for the next one)
     harness: str = "hermes"  # hermes (Hermes Agent over MCP) | pydantic (in-process pydantic-ai agent)
     opik_workspace: str = ""
     opik_project_name: str = "wellops"

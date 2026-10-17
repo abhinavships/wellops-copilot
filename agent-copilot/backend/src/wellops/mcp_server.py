@@ -127,6 +127,19 @@ def search_docs(ctx: Context, query: str) -> str:
 
 
 @mcp.tool()
+def search_knowledge(ctx: Context, query: str, k: int = 6, asset_id: str | None = None, kind: str | None = None,
+                     start: str | None = None, end: str | None = None) -> str:
+    """Find verbatim passages that answer WHY / "what does the manual or SOP say" / "what did the report or notes
+    say" questions: manuals and SOPs (by section), maintenance report text (with char spans), operator notes and
+    inspection notes, uploaded documents and image captions. Hybrid keyword + semantic ranking; each hit carries a
+    citation (doc §section, MNT id + span, CTX/INS id). Filters: asset_id (WELL-0151; manuals stay eligible),
+    kind (doc | report | note | media), start/end (YYYY-MM-DD). Quote the snippet and cite its id; use the typed
+    tools, not this, for counts, statuses and numbers over time."""
+    from wellops import rag
+    return _out(ctx, rag.search_knowledge, query, k, asset_id, kind, start, end)
+
+
+@mcp.tool()
 def sql(ctx: Context, query: str) -> str:
     """Read-only SQL (SELECT/WITH). Use {ds} and {asof} placeholders. Prefer the typed tools above."""
     return _out(ctx, tools.sql, query, "entity_list")
