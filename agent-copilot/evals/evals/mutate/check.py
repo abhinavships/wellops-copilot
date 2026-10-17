@@ -18,16 +18,6 @@ def _q(con, sql, *a):
     return con.execute(sql, list(a)).fetchall()
 
 
-def add_t500_rules(con) -> None:
-    """Emulates `make rules-extract` for the new manual: rule row (quote verified in the manual) + inheritance from T200."""
-    con.execute("INSERT INTO rules VALUES (?,?,?,?,?,?,?,?)", [T500_RULE["param"], "well_type", "T500", T500_RULE["value"],
-                                                               "degC", T500_RULE["doc_id"], T500_RULE["section"], T500_RULE["quote"]])
-    con.execute("INSERT INTO type_inherits VALUES (?,?,?)", [DSM, "T500", "T200"])
-    # a T350-style rule row for params that T500 wells need from T200 is resolved through type_inherits
-    for p in ("wellhead_temp_max_c",):
-        con.execute("INSERT INTO rules VALUES (?,?,?,?,?,?,?,?)", [p, "well_type", "T500", 105.0, "degC", "OM-T500", "4", "at or below 105 °C"])
-
-
 def run_checks(data_dir: Path, manifest: dict, db_path: Path | None = None) -> dict:
     db_path = db_path or Path(tempfile.mkdtemp()) / "mut.duckdb"
     con = ingest.connect(db_path)
@@ -55,19 +45,26 @@ def run_checks(data_dir: Path, manifest: dict, db_path: Path | None = None) -> d
     mx = _q(con, "SELECT max(inspected_at)::DATE FROM inspections WHERE dataset_id=?", DSM)[0][0]
     exp = date(2026, 10, 15) + timedelta(days=manifest["shift_days"])
     rec("horizon_shifted", mx >= exp, f"max inspection {mx}, expected >= {exp}")
-    # ---- new type: silently dropped without a rule, present once rules are extracted
+    # ---- new type: rules come from its manual at ingest (regression for the silent-drop finding fixed in 5a98a76)
     if manifest["t500_wells"]:
         t5 = manifest["t500_wells"]
         raw = _q(con, "SELECT count(*) FROM inspections WHERE dataset_id=? AND asset_id IN (SELECT unnest(?))", DSM, t5)[0][0]
-        vis = _q(con, "SELECT count(*) FROM ins_eff(?, ?::TIMESTAMPTZ) WHERE asset_id IN (SELECT unnest(?))", DSM, asof, t5)[0][0]
-        rec("FINDING_t500_dropped_from_views_without_rule", vis == 0 and raw > 0,
-            f"raw inspections={raw}, visible in ins_eff before rule extraction={vis} (silent drop; profiler must flag new well types)")
-        manual = [r for r in _q(con, "SELECT doc_id FROM docs WHERE dataset_id=? AND doc_id='OM-T500'", DSM)]
-        rec("t500_manual_ingested_as_doc", bool(manual))
-        add_t500_rules(con)
-        vis2 = _q(con, "SELECT count(*), min(delta_min_c), max(delta_min_c) FROM ins_eff(?, ?::TIMESTAMPTZ) WHERE asset_id IN (SELECT unnest(?))",
-                  DSM, asof, t5)[0]
-        rec("t500_threshold_25_applied_after_rule", vis2[0] == raw and vis2[1] == 25 and vis2[2] == 25, f"rows={vis2[0]} theta=({vis2[1]},{vis2[2]})")
+        vis = _q(con, "SELECT count(*), min(delta_min_c), max(delta_min_c) FROM ins_eff(?, ?::TIMESTAMPTZ) "
+                      "WHERE asset_id IN (SELECT unnest(?))", DSM, asof, t5)[0]
+        rec("t500_visible_in_views", raw > 0 and vis[0] == raw, f"raw inspections={raw}, visible in ins_eff={vis[0]}")
+        rec("t500_threshold_25_from_manual", vis[1] == T500_RULE["value"] and vis[2] == T500_RULE["value"], f"theta=({vis[1]},{vis[2]})")
+        rule = _q(con, "SELECT doc_id, section, quote FROM rules WHERE param=? AND scope_level='well_type' AND scope_key='T500'",
+                  T500_RULE["param"])
+        quoted = bool(rule) and _q(con, "SELECT count(*) FROM docs WHERE dataset_id=? AND doc_id=? AND section=? AND "
+                                        "replace(regexp_replace(text, '\\s+', ' ', 'g'), '**', '') LIKE '%' || ? || '%'",
+                                   DSM, *rule[0])[0][0] > 0
+        rec("t500_rule_quote_verbatim_in_manual", quoted and rule[0][:2] == (T500_RULE["doc_id"], T500_RULE["section"]),
+            f"rule={rule[0] if rule else None}")
+        parent = _q(con, "SELECT parent FROM type_inherits WHERE dataset_id=? AND well_type='T500'", DSM)
+        rec("t500_inherits_t200", parent == [("T200",)], f"parent={parent}")
+        flags = {k: n for k, n in _q(con, "SELECT kind, count(*) FROM dq_flags WHERE dataset_id=? AND entity_id='T500' GROUP BY 1", DSM)}
+        rec("t500_dq_flag_rules_extracted", flags.get("rules_extracted_from_new_manual") == 1 and "well_type_without_rule" not in flags,
+            f"flags={flags}")
     # ---- invariants
     fleet = _q(con, "SELECT count(*) FROM ins_eff(?, ?::TIMESTAMPTZ) WHERE NOT producing AND inspected_at::DATE >= ?", DSM, asof,
                today - timedelta(days=120))[0][0]
@@ -88,6 +85,8 @@ def run_checks(data_dir: Path, manifest: dict, db_path: Path | None = None) -> d
     # ---- id collisions
     dup = _q(con, "SELECT count(*) FROM (SELECT inspection_id FROM inspections WHERE dataset_id=? GROUP BY 1 HAVING count(DISTINCT asset_id)>1)", DSM)[0][0]
     if manifest.get("collide"):
+        flagged = _q(con, "SELECT count(*) FROM dq_flags WHERE dataset_id=? AND kind='duplicate_inspection_id'", DSM)[0][0]
+        rec("duplicate_inspection_ids_flagged", flagged == dup, f"{flagged} dq flags for {dup} duplicate ids")
         rec("collision_detected_by_check", dup > 0, f"{dup} inspection_ids shared by >1 well (substrate joins on inspection_id alone: cross-well contamination risk)")
         rows = _q(con, "SELECT count(*) FROM ins_eff(?, ?::TIMESTAMPTZ)", DSM, asof)[0][0]
         raw = _q(con, "SELECT count(*) FROM inspections WHERE dataset_id=? AND inspected_at <= ?::TIMESTAMPTZ", DSM, asof)[0][0]

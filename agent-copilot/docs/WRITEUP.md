@@ -99,6 +99,20 @@ The eval system is its own project (`evals/`) that depends on the backend.
   episodes read as conversations.
 
 <!-- LIVE-RESULTS -->
+**Results so far (17 Oct 2026).** Offline (`fake` target): 18/18 golden episodes pass, meta-eval recall 1.00 on
+every scorer with 0 false alarms, and the key audit gives 199 agree / 0 disagree. Live (`api` target, local
+`gemma4-e2b-32k`, k = 1, partial slice, run `20261017-125342-api-golden`):
+
+| case | score | outcome | failure class |
+|---|---|---|---|
+| Q01 status card | 0.00 | no answer after 204 s: `Exceeded maximum output retries (2)` | grounding / verification (all 3 attempts rejected by the gates) |
+| Q06 top-3 downtime bar | n/a | still running at the deadline | n/a |
+| Q13 spill-volume correction | n/a | not reached | n/a |
+
+The live slice is too small to score the system. What it does show is that the verifier refuses to emit an
+ungrounded answer rather than passing one through. The cost is that a 2B local model can't satisfy the claim
+format within two retries. Running the live evals also surfaced three eval-side bugs, now fixed: nested
+`assert_fact` args, an unhandled `RUN_ERROR`, and runs that lost all results when interrupted.
 
 ## 5. Robustness to an unseen dataset
 
@@ -108,16 +122,17 @@ To rehearse, `evals/mutate` builds a **mutated dataset** with seeded changes: 12
 type T500 with its own manual, 25 renamed report files, the time horizon shifted by 28 days, and optionally
 cloned IDs. Invariant checks then run on it: counts match the files on disk, every report resolves after
 renames, area sums equal fleet totals, windows nest, and there is one latest status per well. All pass. The
-rehearsal also found two real risks. We report them here, and the runbook handles them by hand until the profiler
-does it automatically:
+rehearsal also **found two real bugs, which were then fixed** (commit `5a98a76`). Both are now regression checks:
 
-- **A new well type is silently dropped from the status views** until a threshold rule exists for it (1,154 T500
-  inspections were invisible). The fix path: the manual is ingested as a document, a rule is extracted with a
-  verbatim-quote check, and after that the 25 °C threshold applies to all 1,154 rows. The profiler does not yet
-  flag unknown well types automatically, so the runbook checks for them by hand.
-- **ID collisions.** A cloned well creates 207 inspection IDs shared by two wells. The substrate does not
-  fan out rows, but any join on `inspection_id` alone is a contamination risk, so `dataset_id` scoping on every
-  view and the collision report at ingest are mandatory.
+- **A new well type was silently dropped from the status views** because it had no threshold rule: 1,154 T500
+  inspections were invisible. Fix: ingest extracts rules from any unseen well-type manual, checks each quote
+  verbatim and records the section (here 25 °C from OM-T500 §3, plus "follow the T200 manual" as inheritance). The
+  dq flag `rules_extracted_from_new_manual` records this. A type with no rule at all falls back to T200 thresholds
+  with the flag `well_type_without_rule`, so nothing disappears silently. Checks now: 1,154 / 1,154 visible,
+  θ = 25, quote found in the manual, parent T200, plus a test with the manual deleted.
+- **ID collisions.** A cloned well creates 207 inspection IDs shared by two wells. All 207 are now flagged as
+  `duplicate_inspection_id` (checked: 207 flags for 207 duplicates). The substrate does not fan out rows, but
+  overlays still key on `inspection_id` alone, and the flag discloses that risk.
 
 Final-2-hours runbook (PLAN §3): ingest and profile the test set, read the drift report, extract rules for any new
 manual, set `ACTIVE_DATASET` and the clock, run the smoke evals on the new data, then answer with the capability
