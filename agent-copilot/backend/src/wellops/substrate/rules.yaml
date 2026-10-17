@@ -1,0 +1,32 @@
+# Rules compiled from the manuals and SOPs. Each quote must appear verbatim (markdown emphasis and
+# whitespace normalised) in its source doc; `make rules-check` fails otherwise.
+# scope_level: well_type | fleet. Runtime overrides live in `assertions` (kind = rule_override).
+docs:
+  OM-T200: fleet/well-types/T200.md
+  OM-T350: fleet/well-types/T350.md
+  SOP-SR: fleet/sops/spill-response-sop.md
+  SOP-RC: fleet/sops/regulatory-compliance-sop.md
+  SOP-WS: fleet/sops/field-work-sop.md
+inherits:
+  T350: T200   # OM-T350 §1: "Procedures not listed here follow the T200 manual."
+rules:
+  - {param: production_delta_min_c, scope_level: well_type, scope_key: T200, value: 15, unit: degC, doc_id: OM-T200, section: "9.3", quote: "at least 15 °C above ambient"}
+  - {param: production_delta_min_c, scope_level: well_type, scope_key: T350, value: 20, unit: degC, doc_id: OM-T350, section: "3", quote: "at least 20 °C above ambient"}
+  - {param: wellhead_temp_max_c, scope_level: well_type, scope_key: T200, value: 85, unit: degC, doc_id: OM-T200, section: "9.4", quote: "at or below 85 °C"}
+  - {param: wellhead_temp_max_c, scope_level: well_type, scope_key: T350, value: 95, unit: degC, doc_id: OM-T350, section: "4", quote: "at or below 95 °C"}
+  - {param: spill_shutin_area_pct, scope_level: well_type, scope_key: T200, value: 5, unit: pct, doc_id: OM-T200, section: "9.5", quote: "more than 5 % of the pad area"}
+  - {param: rca_corrective_count_min, scope_level: well_type, scope_key: T200, value: 3, unit: count, doc_id: OM-T200, section: "10", quote: "Three or more corrective maintenance events on the same equipment kind in the 12 months before the current date"}
+  - {param: rca_corrective_count_min, scope_level: well_type, scope_key: T350, value: 3, unit: count, doc_id: OM-T350, section: "6", quote: "RCA after three corrective events on the same equipment kind within 12 months"}
+  - {param: rca_window_months, scope_level: fleet, scope_key: "*", value: 12, unit: months, doc_id: OM-T200, section: "10", quote: "in the 12 months before the current date"}
+  - {param: consecutive_downtime_report_days, scope_level: fleet, scope_key: "*", value: 14, unit: days, doc_id: SOP-RC, section: "2", quote: "down for more than 14 consecutive days"}
+  - {param: spill_class_moderate_min_bbl, scope_level: fleet, scope_key: "*", value: 1, unit: bbl, doc_id: SOP-SR, section: "3", quote: "1 bbl to below 5 bbl"}
+  - {param: spill_class_reportable_min_bbl, scope_level: fleet, scope_key: "*", value: 5, unit: bbl, doc_id: SOP-SR, section: "3", quote: "5 bbl to below 25 bbl"}
+  - {param: spill_class_major_min_bbl, scope_level: fleet, scope_key: "*", value: 25, unit: bbl, doc_id: SOP-SR, section: "3", quote: "25 bbl or more"}
+  - {param: spill_report_hours, scope_level: fleet, scope_key: "*", value: 24, unit: h, doc_id: SOP-SR, section: "4", quote: "within 24 hours of discovery"}
+  - {param: spill_report_hours_major, scope_level: fleet, scope_key: "*", value: 2, unit: h, doc_id: SOP-SR, section: "4", quote: "within 2 hours for a major spill"}
+  - {param: containment_hours, scope_level: fleet, scope_key: "*", value: 4, unit: h, doc_id: SOP-SR, section: "4", quote: "contained within 4 hours of discovery"}
+  - {param: remediation_verify_days, scope_level: fleet, scope_key: "*", value: 60, unit: d, doc_id: SOP-SR, section: "4", quote: "verified within 60 days of discovery"}
+  - {param: hse_notice_hours_moderate, scope_level: fleet, scope_key: "*", value: 72, unit: h, doc_id: SOP-SR, section: "3", quote: "notify HSE within 72 h"}
+  - {param: inspection_max_gap_days, scope_level: fleet, scope_key: "*", value: 14, unit: d, doc_id: SOP-RC, section: "2", quote: "inspected at least once every 14 days"}
+  - {param: nov_response_days, scope_level: fleet, scope_key: "*", value: 30, unit: d, doc_id: SOP-RC, section: "2", quote: "answered within 30 days"}
+  - {param: report_written_days, scope_level: fleet, scope_key: "*", value: 3, unit: d, doc_id: SOP-WS, section: "3", quote: "within 3 days of finishing the work"}

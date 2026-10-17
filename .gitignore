@@ -1,1 +1,8 @@
 agent-copilot/dataset/
+.env
+**/__pycache__/
+.venv/
+*.duckdb
+*.duckdb.wal
+node_modules/
+.next/

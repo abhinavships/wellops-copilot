@@ -31,7 +31,7 @@ erDiagram
 
 ```
 fleet/
-  areas.json            4 areas × 50 wells · center lat/lon · team_id ; 5 teams (lead_user_id)
+  areas.json            4 areas × 50 wells · center lat/lon · team_id ; teams (lead_user_id) — maintenance and HSE teams appear only via users.team_id
   users.json            15 users · role ∈ {production_supervisor, field_operator, field_inspector,
                         maintenance_lead, maintenance_technician, hse_officer} · team_id
   well-types/T200.md    OM-T200 rev 4: §9.3 producing ⇔ Δ ≥ 15 °C · §9.4 alarm > 85 °C · §9.5 spill > 5 % pad ⇒ shut-in
