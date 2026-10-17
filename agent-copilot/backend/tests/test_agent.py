@@ -2,7 +2,7 @@ import json
 
 import pytest
 from pydantic_ai.messages import ModelResponse, ToolCallPart
-from pydantic_ai.models.function import FunctionModel
+from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
 from wellops import tools as T
 from wellops.agent import build_agent, run_turn
@@ -23,7 +23,11 @@ def scripted(*steps):
         name, args = s(messages) if callable(s) else s
         return ModelResponse(parts=[ToolCallPart(name, args)])
 
-    return FunctionModel(fn), calls
+    async def stream(messages, info):  # same script for streamed runs (AG-UI)
+        p = fn(messages, info).parts[0]
+        yield {0: DeltaToolCall(name=p.tool_name, json_args=json.dumps(p.args))}
+
+    return FunctionModel(fn, stream_function=stream), calls
 
 
 def handle_of(messages, tool):
