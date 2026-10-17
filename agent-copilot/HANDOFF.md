@@ -78,6 +78,15 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 - Gotchas: the API server holds the DuckDB lock, so in-process scripts must use `DB_PATH=/tmp/<name>.duckdb` and ingest first.
   Small models send nested tool args as JSON strings; `Scope`/`AssertionIn` accept them (b9627e0).
 
+## 4a'. ARCHITECTURE v2 (Hermes harness), current
+UI (Next.js, client-side gen-UI) ─AG-UI SSE─▶ FastAPI /api/agui ─▶ hermes_bridge ─subprocess─▶ hermes/runner.py (Hermes AIAgent, own venv)
+Hermes ─MCP streamable HTTP─▶ /mcp (wellops.mcp_server, in the API process, shares DuckDB): 20 tools (status, downtime, spills, obligations,
+RCA, costs, evidence, docs, sql, corrections, memory, show_visual, generate_image, ingest_file, analyze_image, list_media, user_tables).
+The bridge composes an AnswerSpec (text + show_visual queue) and runs the verifier gates plus tool_grounded; on failure it re-asks Hermes (≤2).
+Provider: settings.hermes_provider = nvidia (NVIDIA_API_KEY, integrate.api.nvidia.com) | openrouter. The OpenRouter free quota ran out on 10/17.
+Ingestion: POST /api/ingest (CSV/XLSX/JSON → tables, MD/PDF → docs + rules, images → media + vision caption). Voice: /api/tts. Images: /api/media/gen.
+Evals: `evals.run --target hermes` (8e5dd7f). UI: 1422a47 (minimal answers, inline interactive charts, canvas modal, chat chart intents, upload).
+
 ## 4c. DEMO RUNBOOK (presentation)
 1. API, Nemotron first (gemma4-e2b fails verifier retries; qwen3-vl untested at agent level):
    `cd backend && MODEL_FALLBACKS="openrouter:nvidia/nemotron-3-super-120b-a12b:free,openrouter:poolside/laguna-s-2.1:free,ollama:qwen3-vl-8b-32k" uv run uvicorn wellops.api.app:app --port 8000`
