@@ -106,8 +106,8 @@ every scorer with 0 false alarms, and the key audit gives 199 agree / 0 disagree
 | case | score | outcome | failure class |
 |---|---|---|---|
 | Q01 status card | 0.00 | no answer after 204 s: `Exceeded maximum output retries (2)` | grounding / verification (all 3 attempts rejected by the gates) |
-| Q06 top-3 downtime bar | n/a | still running at the deadline | n/a |
-| Q13 spill-volume correction | n/a | not reached | n/a |
+| Q06 top-3 downtime bar | 0.00 | no answer after 349 s: `Exceeded maximum output retries (2)` | grounding / verification (same) |
+| Q13 spill-volume correction | n/a | not reached (run stopped by SIGTERM; partial report written) | n/a |
 
 The live slice is too small to score the system. What it does show is that the verifier refuses to emit an
 ungrounded answer rather than passing one through. The cost is that a 2B local model can't satisfy the claim
