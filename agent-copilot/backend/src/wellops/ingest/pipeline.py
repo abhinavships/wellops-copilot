@@ -360,7 +360,8 @@ def _well_type(filename: str, text: str) -> str | None:
 VISION_PREFERRED = ("nvidia/nemotron-3.5-super-vl", "google/gemma-4-31b-it", "google/gemma-4-26b-a4b-it", "qwen/", "meta-llama/",
                     "mistralai/")
 VISION_EXCLUDED = ("thinkingmachines/", "content-safety")
-VISION_REJECTED: set[str] = set()  # models that answered 401/403/404 in this process: skipped for later images
+VISION_REJECTED: set[str] = set()
+QUOTA_EXHAUSTED: list[str] = []  # set on the first 429; vision() then fails fast without calling upstream  # models that answered 401/403/404 in this process: skipped for later images
 
 
 def free_vision_model() -> str | None:
@@ -378,6 +379,8 @@ def vision(image: bytes, mime: str, prompt: str, model: str | None = None) -> tu
     """ONE chat call with the image inline. Returns (model, text)."""
     if not settings.openrouter_api_key:
         raise RuntimeError("OPENROUTER_API_KEY missing")
+    if QUOTA_EXHAUSTED:  # a 429 (daily free quota) will not clear this session: make no further calls
+        raise RuntimeError(QUOTA_EXHAUSTED[0])
     model = model or free_vision_model()
     if not model:
         raise RuntimeError("no free OpenRouter vision model available right now")
@@ -389,6 +392,8 @@ def vision(image: bytes, mime: str, prompt: str, model: str | None = None) -> tu
     if r.status_code != 200:
         if r.status_code in (401, 403, 404):
             VISION_REJECTED.add(model)
+        if r.status_code == 429:
+            QUOTA_EXHAUSTED.append(f"OpenRouter quota exhausted (HTTP 429): {r.text[:120]}")
         raise RuntimeError(f"vision call failed ({model}): HTTP {r.status_code} {r.text[:200]}")
     return model, (r.json()["choices"][0]["message"].get("content") or "").strip()
 
@@ -427,7 +432,8 @@ def _ingest_image(db: Db, path: Path, filename: str, ext: str, principal: str) -
         caption, text = str(j.get("caption") or out[:300]), str(j.get("text") or "")
         tags = [str(t).lower() for t in (j.get("tags") or [])][:8]
     except Exception as e:  # stored even if the description fails; analyze_image can retry later
-        rep.warnings.append(f"not described: {e}"[:300])
+        caption = "Image " + re.sub(r"[_-]+", " ", Path(filename).stem).strip() + " (not described: vision unavailable)"
+        rep.warnings.append(f"vision model unavailable: {e}"[:300])
     wells = WELL_RE.findall(f"{filename} {text} {caption}".upper())
     asset = wells[0] if wells else None
     db.run("INSERT INTO media VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", [mid, DS, _rel(stored), filename, sha, caption,

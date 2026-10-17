@@ -91,3 +91,15 @@ def test_api_upload_multipart_and_history(db):
     assert h[0]["file"] == "notes.txt" and h[0]["principal"] == "U-201"
     assert c.post("/api/ingest", content=b"x").status_code == 400
     assert c.get("/api/media/MED-nope").status_code == 404
+
+
+def test_image_degrades_when_vision_unavailable(tmp_path, monkeypatch, db):
+    def boom(*a, **k):
+        raise RuntimeError("OpenRouter quota exhausted (HTTP 429)")
+    monkeypatch.setattr(pipeline, "vision", boom)
+    p = tmp_path / "WELL-0007_pad-north.jpg"
+    p.write_bytes(b"\xff\xd8\xff fake jpeg")
+    r = pipeline.ingest_file(p, p.name, "U-201", db=db)
+    assert r.kind == "image" and r.preview[0]["asset_id"] == "WELL-0007"
+    assert r.preview[0]["caption"].startswith("Image WELL 0007 pad north")
+    assert r.warnings == ["vision model unavailable: OpenRouter quota exhausted (HTTP 429)"]
