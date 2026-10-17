@@ -147,6 +147,34 @@ def recall_conversations(ctx: Context, query: str) -> str:
 
 
 @mcp.tool()
+def ingest_file(ctx: Context, path: str) -> str:
+    """Ingest a local file into WellOps (CSV/XLSX/JSON -> tables, MD/PDF -> docs and rules, images -> media)."""
+    from wellops.tools.ingest_tools import ingest_file_tool
+    return _out(ctx, ingest_file_tool, path)
+
+
+@mcp.tool()
+def analyze_image(ctx: Context, media_id: str, question: str | None = None) -> str:
+    """Describe or answer a question about an uploaded image (site photo, gauge, document scan) by media id."""
+    from wellops.tools.ingest_tools import analyze_image as fn
+    return _out(ctx, fn, media_id, question)
+
+
+@mcp.tool()
+def list_media(ctx: Context, asset_id: str | None = None) -> str:
+    """Uploaded images (optionally for one well) with captions."""
+    from wellops.tools.ingest_tools import list_media as fn
+    return _out(ctx, fn, asset_id)
+
+
+@mcp.tool()
+def user_tables(ctx: Context) -> str:
+    """Tables created from uploaded data files, with columns; query them with the sql tool."""
+    from wellops.ingest.pipeline import user_tables_catalog
+    return json.dumps(user_tables_catalog(), default=str)
+
+
+@mcp.tool()
 def generate_image(ctx: Context, prompt: str, width: int = 768, height: int = 512) -> str:
     """Create an image from a text prompt (illustrations, site diagrams, report covers). Then call
     show_visual(type="image", title=<prompt>, handle=<media_id>) to display it."""
