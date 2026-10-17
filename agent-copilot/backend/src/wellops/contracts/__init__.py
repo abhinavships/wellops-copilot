@@ -7,7 +7,9 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+import json
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class RunDeps(BaseModel):
@@ -110,6 +112,11 @@ class AssertionIn(BaseModel):
     reason: str | None = None
     valid_from: date | None = None
     valid_to: date | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _json_string(cls, v: Any) -> Any:  # small models send nested tool args as JSON strings
+        return json.loads(v) if isinstance(v, str) and v.lstrip().startswith("{") else v
 
 
 class AssertionOut(AssertionIn):

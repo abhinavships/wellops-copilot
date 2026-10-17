@@ -121,3 +121,12 @@ def test_sql_guard(deps):
         raise AssertionError(bad)
     r = T.sql(deps(), "SELECT count(*) AS n FROM wells WHERE dataset_id={ds}")
     assert r.preview == [{"n": 200}] and "'sample'" in r.sql
+
+
+def test_scope_accepts_what_small_models_send():
+    from wellops.tools.core import Scope
+    assert Scope.model_validate('{"kind": "wells", "ids": ["WELL-0175"]}') == Scope(kind="wells", ids=["WELL-0175"])
+    assert Scope.model_validate('{"kind": "wells"}') == Scope() == Scope.model_validate("all")
+    assert Scope.model_validate("WELL-0007") == Scope(kind="wells", ids=["WELL-0007"])
+    assert Scope.model_validate(["T200"]) == Scope(kind="well_type", ids=["T200"])
+    assert Scope.model_validate("Northeast Block 8") == Scope(kind="area", ids=["Northeast Block 8"])

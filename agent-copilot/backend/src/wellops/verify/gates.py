@@ -111,6 +111,9 @@ def check_claim(db: Db, chat_id: str, c: Claim, cache: dict) -> str | None:
     st = store(db).get(chat_id, c.handle)
     if not st:
         return f"claim '{c.text}': unknown handle {c.handle}"
+    if c.column in ("row_count", "count", None) and not c.row_key and len(st.rows) != 1:  # "15 wells" = size of the result
+        n = st.result.row_count
+        return None if _equal(n, c.value) else f"claim '{c.text}': {c.handle} has {n} rows, not {c.value!r}"
     row = _find_row(st.rows, c.row_key)
     if row is None:
         return f"claim '{c.text}': no row {c.row_key} in {c.handle}"

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import duckdb
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from wellops.contracts import Citation, Conflict, DQFlag, RunDeps, ToolResult
 from wellops.settings import settings
@@ -145,6 +145,34 @@ class Scope(BaseModel):
     kind: Literal["wells", "area", "well_type", "all"] = "all"
     ids: list[str] = []  # well ids, area ids or names, or well types
 
+    @model_validator(mode="before")
+    @classmethod
+    def _lenient(cls, v: Any) -> Any:
+        """Small models send the object as a JSON string, a bare id, or a list of ids."""
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except ValueError:
+                return _scope_items([v])
+        if isinstance(v, list):
+            return _scope_items(v)
+        if isinstance(v, dict) and v.get("kind") != "all" and not v.get("ids"):
+            return {}  # a kind without ids means everything
+        return v
+
+
+def _scope_items(items: list) -> dict:
+    items = [str(i) for i in items]
+    if not items or (len(items) == 1 and items[0].lower() == "all"):
+        return {}
+    wells = [i.upper() for i in items if WELL_RE.fullmatch(i.upper())]
+    if len(wells) == len(items):
+        return dict(kind="wells", ids=wells)
+    types = [i.upper() for i in items if re.fullmatch(r"T\d{3}", i.upper())]
+    if len(types) == len(items):
+        return dict(kind="well_type", ids=types)
+    return dict(kind="area", ids=items)
+
 
 def coerce_scope(db: Db, deps: RunDeps, scope: Scope | dict | str | list | None) -> Scope:
     if scope is None:
@@ -153,16 +181,7 @@ def coerce_scope(db: Db, deps: RunDeps, scope: Scope | dict | str | list | None)
         return Scope(**scope)
     if isinstance(scope, Scope):
         return scope
-    items = [scope] if isinstance(scope, str) else list(scope)
-    if len(items) == 1 and items[0].lower() == "all":
-        return Scope()
-    wells = [i.upper() for i in items if WELL_RE.fullmatch(i.upper())]
-    if len(wells) == len(items):
-        return Scope(kind="wells", ids=wells)
-    types = [i.upper() for i in items if re.fullmatch(r"T\d{3}", i.upper())]
-    if len(types) == len(items):
-        return Scope(kind="well_type", ids=types)
-    return Scope(kind="area", ids=items)
+    return Scope.model_validate(scope)
 
 
 def _akey(s: str) -> str:
