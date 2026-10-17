@@ -15,7 +15,7 @@ function wrap(t: string, max: number): string[] {
 export function EvidenceChain({ rows }: VisualProps) {
   const { openEvidence } = useUi();
   const [ref, width] = useWidth<HTMLDivElement>();
-  const n = rows.length, GAP = 26, horizontal = width >= n * 128 + (n - 1) * GAP;
+  const n = rows.length, GAP = 26, horizontal = width >= n * 116 + (n - 1) * GAP;
   const NW = horizontal ? Math.min(170, Math.floor((width - (n - 1) * GAP) / n)) : 150, NH = 76, gap = GAP;
   const W = horizontal ? n * NW + (n - 1) * gap : Math.max(width, 240), H = horizontal ? NH + 8 : n * NH + (n - 1) * gap + 8;
   const pos = (i: number) => (horizontal ? { x: i * (NW + gap), y: 4 } : { x: 0, y: 4 + i * (NH + gap) });
