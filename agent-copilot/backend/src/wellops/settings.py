@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     opik_api_key: str = ""
     elevenlabs_api_key: str = ""
+    tts_model: str = "eleven_v3_conversational"  # or eleven_v4 / eleven_flash_v2_5 (cheapest)
+    tts_voice: str = "cgSgspJ2msm6clMCkdW9"  # Jessica · Playful, Bright, Warm
     gemini_api_key: str = ""
     llm_provider: str = "gemini"  # Google OpenAI-compatible endpoint
     llm_model: str = ""  # default per provider below

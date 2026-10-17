@@ -19,9 +19,10 @@ from wellops.settings import ROOT, settings
 
 router = APIRouter()
 
-MODEL = "eleven_flash_v2_5"  # cheapest ElevenLabs model
-VOICE = "EXAVITQu4vr4xnSDxMaL"  # Sarah, a premade voice (free plans cannot use library voices such as Rachel via the API)
-FORMAT = "mp3_22050_32"
+MODEL = settings.tts_model  # eleven_v3_conversational: the most natural, conversational delivery available on this key
+VOICE = settings.tts_voice  # Jessica (warm, bright premade voice); free plans cannot use library voices via the API
+FORMAT = "mp3_44100_128"  # full-quality audio; the low-bitrate format sounded robotic
+VOICE_SETTINGS = {"stability": 0.4, "similarity_boost": 0.8, "style": 0.35, "use_speaker_boost": True}
 MAX_CHARS = 400
 CACHE = ROOT / "backend" / ".tts_cache"
 BLOCKED: list[str] = []  # first auth/plan error from upstream; no further upstream calls while set
@@ -29,6 +30,12 @@ BLOCKED: list[str] = []  # first auth/plan error from upstream; no further upstr
 
 class TtsIn(BaseModel):
     text: str
+
+
+SAY = [(r"\bWELL-0*(\d+)\b", r"well \1"), (r"\bINS-0*(\d+)-0*(\d+)\b", r"inspection \1 dash \2"),
+       (r"\bMNT-0*(\d+)-0*(\d+)\b", r"repair report \1 dash \2"), (r"\bCTX-0*(\d+)-0*(\d+)\b", r"note \1 dash \2"),
+       (r"\bREG-0*(\d+)-0*(\d+)\b", r"regulatory event \1 dash \2"), (r"\s?°C\b", " degrees"), (r"\bbbl\b", "barrels"),
+       (r"\bUSD\s?", "$"), (r"\bΔ\s?", "a difference of "), (r"\bSR-0?(\d)", r"S R \1"), (r"\bRC-0?(\d)", r"R C \1")]
 
 
 def speakable(md: str, limit: int = MAX_CHARS) -> str:
@@ -40,6 +47,9 @@ def speakable(md: str, limit: int = MAX_CHARS) -> str:
     t = re.sub(r"(?m)^\s*\|?[\s:|-]+\|[\s:|-]*$", " ", t)  # table separator rows
     t = re.sub(r"[*_`~|]", " ", t)
     t = " ".join(t.split())
+    t = t.split(" Data (")[0]  # never read the data appendix aloud
+    for a, b in SAY:  # read ids and units like a person would
+        t = re.sub(a, b, t)
     out = ""
     for s in re.split(r"(?<=[.!?])\s+", t):
         if len(out) + len(s) + 1 > limit:
@@ -65,7 +75,7 @@ async def tts(body: TtsIn) -> Response:
         r = await client.post(f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE}",
                                params={"output_format": FORMAT},
                                headers={"xi-api-key": settings.elevenlabs_api_key, "Accept": "audio/mpeg"},
-                               json={"text": text, "model_id": MODEL})
+                               json={"text": text, "model_id": MODEL, "voice_settings": VOICE_SETTINGS})
     if r.status_code != 200:  # never echo request headers (the key); upstream body is a short JSON error
         msg = f"upstream error {r.status_code}: {r.text[:200]}"
         if r.status_code in (401, 402, 403):
