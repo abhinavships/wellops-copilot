@@ -15,7 +15,7 @@ export function SourcesList({ rows }: VisualProps) {
       {items.map((r, i) => {
         const id = String(r.id ?? ""), kind = String(r.kind ?? "doc");
         const span = Array.isArray(r.span) ? (r.span as number[]) : undefined;
-        const snippet = String(r.snippet ?? "").replace(/^#+\s*/gm, "").replace(/\s+/g, " ").trim();
+        const snippet = String(r.snippet ?? "").replace(/\*\*|__/g, "").replace(/^#+\s*/gm, "").replace(/\s+/g, " ").trim();
         return (
           <li key={i} className="py-3 first:pt-0 last:pb-0">
             <button type="button" className="group block w-full text-left"
