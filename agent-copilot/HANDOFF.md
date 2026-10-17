@@ -87,6 +87,13 @@ Provider: settings.hermes_provider = nvidia (NVIDIA_API_KEY, integrate.api.nvidi
 Ingestion: POST /api/ingest (CSV/XLSX/JSON → tables, MD/PDF → docs + rules, images → media + vision caption). Voice: /api/tts. Images: /api/media/gen.
 Evals: `evals.run --target hermes` (8e5dd7f). UI: 1422a47 (minimal answers, inline interactive charts, canvas modal, chat chart intents, upload).
 
+## 4b'. LIVE RESULTS on Hermes + NVIDIA Nemotron 3 Super (10/17)
+- Q1 status: well_status → show_visual(status_card), all gates pass, 0 retries, 21 s.
+- Q6 top-3 downtime NE-7: resolve_entity → downtime → show_visual(bar) gives 49/42/42 (matches the key), 0 retries.
+- Q8 spills heatmap 2026: spills → show_visual(heatmap), passed after 1 corrective retry.
+- Ingestion: CSV upload creates the user_pump_vendors table, queryable by Hermes.
+Run: `cd backend && uv run uvicorn wellops.api.app:app --port 8000` (.env: NVIDIA_API_KEY, HERMES_PROVIDER=nvidia) and `cd frontend && npm run dev`.
+
 ## 4c. DEMO RUNBOOK (presentation)
 1. API, Nemotron first (gemma4-e2b fails verifier retries; qwen3-vl untested at agent level):
    `cd backend && MODEL_FALLBACKS="openrouter:nvidia/nemotron-3-super-120b-a12b:free,openrouter:poolside/laguna-s-2.1:free,ollama:qwen3-vl-8b-32k" uv run uvicorn wellops.api.app:app --port 8000`
