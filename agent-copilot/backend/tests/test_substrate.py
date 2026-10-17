@@ -126,3 +126,16 @@ def test_q12_value_correction_overlay_keeps_original(con):
         assert old == (False,)
     finally:
         con.execute("DELETE FROM assertions WHERE assertion_id='t-corr'")
+
+
+def test_new_manual_rules_are_extracted_verbatim():
+    from wellops.settings import settings
+    from wellops.substrate.ingest import manual_rules, split_sections
+    rules, parent = manual_rules("T350", split_sections((settings.data_dir / "fleet/well-types/T350.md").read_text()))
+    got = {r["param"]: (r["value"], r["section"], r["quote"]) for r in rules}
+    assert got["production_delta_min_c"] == (20.0, "3", "at least 20 °C above ambient")  # same as rules.yaml
+    assert got["wellhead_temp_max_c"] == (95.0, "4", "at or below 95 °C") and parent == "T200"
+    md = ("# T500 manual\n\n## 1. Scope\n\nProcedures not listed here follow the T200 manual.\n\n## 3. Production\n\n"
+          "A T500 well is **producing (active)** only when its wellhead is at least **25 °C above\nambient** air.\n")
+    rules, parent = manual_rules("T500", split_sections(md))
+    assert [(r["param"], r["value"], r["section"]) for r in rules] == [("production_delta_min_c", 25.0, "3")] and parent == "T200"

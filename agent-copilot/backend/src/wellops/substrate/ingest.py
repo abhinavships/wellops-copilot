@@ -120,23 +120,68 @@ def ingest(data_dir: Path, ds: str, con: duckdb.DuckDBPyConnection) -> dict:
     docs = []
     for doc_id, rel in cfg["docs"].items():
         docs += [(ds, doc_id, rel, *s) for s in split_sections((data_dir / rel).read_text())]
+    rules, inherits = list(cfg["rules"]), dict(cfg.get("inherits", {}))
+    late_flags = []
     for p in sorted((data_dir / "fleet/well-types").glob("*.md")):  # new manuals in test data still load
         rel = str(p.relative_to(data_dir))
         if rel not in cfg["docs"].values():
-            docs += [(ds, f"OM-{p.stem}", rel, *s) for s in split_sections(p.read_text())]
+            secs = split_sections(p.read_text())
+            docs += [(ds, f"OM-{p.stem}", rel, *s) for s in secs]
+            if not any(r["scope_key"] == p.stem for r in rules):
+                got, parent = manual_rules(p.stem, secs)
+                rules += got
+                if parent and p.stem not in inherits:
+                    inherits[p.stem] = parent
+                late_flags.append((ds, p.stem, "rules_extracted_from_new_manual",
+                                   f"OM-{p.stem}: " + (", ".join(f"{r['param']}={r['value']:g} (§{r['section']})" for r in got)
+                                                       or "no rule sentences found") + (f"; inherits {parent}" if parent else "")))
+    typed = {r["scope_key"] for r in rules if r["param"] == "production_delta_min_c"}
+    for (wt,) in con.execute("SELECT DISTINCT well_type FROM wells WHERE dataset_id=?", [ds]).fetchall():
+        if wt not in typed and inherits.get(wt) not in typed:  # never drop a well silently: fall back, and say so
+            inherits[wt] = DEFAULT_PARENT
+            late_flags.append((ds, wt, "well_type_without_rule",
+                               f"no production rule for {wt}; using {DEFAULT_PARENT} thresholds until a rule is set"))
     _many(con, "INSERT INTO docs VALUES (?,?,?,?,?,?)", docs)
-    _many(con, "INSERT INTO type_inherits VALUES (?,?,?)",
-                    [(ds, k, v) for k, v in cfg.get("inherits", {}).items()])
+    _many(con, "INSERT INTO type_inherits VALUES (?,?,?)", [(ds, k, v) for k, v in inherits.items()])
     con.execute("DELETE FROM rules")
     _many(con, "INSERT INTO rules VALUES (?,?,?,?,?,?,?,?)", [
         (r["param"], r["scope_level"], r["scope_key"], r["value"], r["unit"], r["doc_id"], r["section"], r["quote"])
-        for r in cfg["rules"]])
+        for r in rules])
 
     from wellops.substrate import views
     views.install(con)
     from wellops.trust import dq
     dq.compute(con, ds)
+    late_flags += [(ds, i, "duplicate_inspection_id", f"inspection id used by {n} wells: {w}") for i, n, w in con.execute(
+        """SELECT inspection_id, count(DISTINCT asset_id), string_agg(DISTINCT asset_id, ', ') FROM inspections
+           WHERE dataset_id=? GROUP BY inspection_id HAVING count(DISTINCT asset_id) > 1""", [ds]).fetchall()]
+    _many(con, "INSERT INTO dq_flags VALUES (?,?,?,?)", late_flags)
     return {t: con.execute(f"SELECT count(*) FROM {t} WHERE dataset_id=?", [ds]).fetchone()[0] for t in RAW_TABLES}
+
+
+DEFAULT_PARENT = "T200"
+RULE_PATTERNS = [  # sentences a well-type manual uses for its numeric rules (same phrasing as rules.yaml quotes)
+    ("production_delta_min_c", "degC", re.compile(r"at least (\d+(?:\.\d+)?) °C above ambient")),
+    ("wellhead_temp_max_c", "degC", re.compile(r"at or below (\d+(?:\.\d+)?) °C")),
+    ("spill_shutin_area_pct", "pct", re.compile(r"more than (\d+(?:\.\d+)?) % of the pad area")),
+]
+INHERIT_RE = re.compile(r"(?:follow|same as) (?:the )?(T\d{3})\b", re.I)
+
+
+def manual_rules(well_type: str, sections: list[tuple[str, str, str]]) -> tuple[list[dict], str | None]:
+    """Rules + parent type from a manual not listed in rules.yaml; quotes are verbatim after removing emphasis."""
+    rules, parent = [], None
+    for num, _title, text in sections:
+        flat = " ".join(text.replace("**", "").replace("__", "").split())
+        for param, unit, rx in RULE_PATTERNS:
+            m = rx.search(flat)
+            if m and not any(r["param"] == param for r in rules):
+                rules.append(dict(param=param, scope_level="well_type", scope_key=well_type, value=float(m.group(1)),
+                                  unit=unit, doc_id=f"OM-{well_type}", section=num, quote=m.group(0)))
+        m = INHERIT_RE.search(flat)
+        if m and parent is None and m.group(1).upper() != well_type:
+            parent = m.group(1).upper()
+    return rules, parent
 
 
 HEADING = re.compile(r"^(#{1,4})\s+(.*)$")
