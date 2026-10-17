@@ -48,7 +48,7 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 | L3 agent + skills | ⏳ not started | `backend/src/wellops/agent/`, `skills/` | — |
 | L4 verifier | ⏳ | `backend/src/wellops/verify/` | — |
 | API (FastAPI + AG-UI) | ⏳ | `backend/src/wellops/api/` | — |
-| L5 UI | 🟡 WIP (stream C), ~45 files: visuals, AG-UI client, mock fixtures | `frontend/` | `cd frontend && npm i && NEXT_PUBLIC_MOCK=1 npm run dev` |
+| L5 UI | ✅ done against mocks (build+lint pass); not yet wired live. Mock fixtures contain made-up IDs (e.g. INS-0001-0211, CTX-0164-002) and say "unconfirmed until you decide" (contradicts ADR-013): never demo mock mode, replace fixtures with real data | `frontend/` | `npm i && npm run dev:mock`; screenshots: `node scripts/screenshots.mjs <dir>` |
 | L6 evals | 🟡 WIP (stream D): 18 golden cases (YAML + JSON schema), 60+ synthetic, scorers, Opik metrics, fault injection, key audit | `evals/` (own uv project) | key audit: **agrees 199, disagrees 0, not computable 77** (`evals/results/key_audit.md`) |
 | Mutated dataset | ⏳ | `evals/evals/mutate/` | — |
 

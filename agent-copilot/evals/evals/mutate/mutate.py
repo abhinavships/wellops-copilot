@@ -129,7 +129,8 @@ def make_mutated(out_dir: Path, seed: int = 11, n_new: int = 12, n_t500: int = 6
         (dd / "metadata.json").write_text(json.dumps(meta, indent=2))
         for fn in ("inspections.jsonl", "maintenance.jsonl", "regulatory-events.jsonl", "context.jsonl"):
             if (dd / fn).exists():  # asset_id changes, inspection_id / maintenance_id deliberately stay identical
-                rows = [json.loads(x) for x in (dd / fn).read_text().splitlines() if x.strip()]
+                rows = [json.loads(re.sub(rf"\b(CTX|REG)-{s:04d}", lambda m: f"{m[1]}-{n:04d}", x))
+                        for x in (dd / fn).read_text().splitlines() if x.strip()]
                 for r in rows:
                     r["asset_id"] = f"WELL-{n:04d}"
                 (dd / fn).write_text("\n".join(json.dumps(r) for r in rows) + "\n")
