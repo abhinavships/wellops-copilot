@@ -96,6 +96,17 @@ class AnswerSpec(BaseModel):
     assumptions: list[str] = []  # window, as-of, dataset, conventions
     follow_ups: list[str] = []  # e.g. "Suggest a site check: no recorded reason"
 
+    @model_validator(mode="before")
+    @classmethod
+    def _unwrap(cls, v: Any) -> Any:  # small models wrap the output: {"AnswerSpec": {...}}
+        if isinstance(v, str) and v.lstrip().startswith("{"):
+            v = json.loads(v)
+        if isinstance(v, dict) and "markdown" not in v and len(v) == 1:
+            (inner,) = v.values()
+            if isinstance(inner, dict) and "markdown" in inner:
+                return inner
+        return v
+
 
 AssertionKind = Literal["value_correction", "analysis_correction", "detection_correction", "rule_override",
                         "shared_fact", "status_claim", "planned_downtime"]

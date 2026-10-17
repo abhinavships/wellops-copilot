@@ -89,6 +89,12 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 7. Framing: docs/HARNESS.md (harness-engineering primer mapping).
 8. Known: Q7 map initial view clips WELL-0151 (pan); no wellops.verification event on RUN_ERROR; qwen3-vl-8b on RTX >6 min per question, gemma4-e2b fails gates.
 
+## 4d. Local-model findings (7e smoke, 5 questions): qwen3-vl-8b 2/5, gemma4-e2b 1/5 (hollow)
+Main failure: the model replies in plain text instead of calling final_result, which eats the output retries. Next harness fixes, in order:
+(a) prompted/native output mode for ollama models, or a retry message saying "call final_result"; (b) DONE: unwrap {"AnswerSpec": {...}};
+(c) accept resolve_entity area ids as aliases (AREA-NE7 vs NE-07); (d) verifier gate: the date window must match the question's relative period
+(qwen used 3 months for "last 4 months" and passed); (e) fail claim-free "unable to" answers when tools errored (gemma's refusal passed all gates).
+
 ## 5. Next actions (in order)
 1. Finish stream B: agent + verifier + API. Keep `uv run pytest -q` green in `backend/`.
 2. Switch the local model to `qwen3-vl-8b-32k` if it passes the tool-call test (fallback `gemma4-e2b-32k`).
