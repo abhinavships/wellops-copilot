@@ -52,6 +52,7 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 | L6 evals | 🟡 WIP (stream D): 18 golden cases (YAML + JSON schema), 60+ synthetic, scorers, Opik metrics, fault injection, key audit | `evals/` (own uv project) | key audit: **agrees 199, disagrees 0, not computable 77** (`evals/results/key_audit.md`) |
 | Mutated dataset | ✅ generator + checks; findings fixed in 5a98a76 (new well-type rules extracted from its manual, T200 fallback + dq flag; duplicate inspection ids flagged) | `evals/evals/mutate/` | evals `uv run pytest -q` (25 pass) |
 | Eval runner | ✅ `evals/evals/run.py` + Opik sink; never run against a live API | `evals/evals/run.py`, `runner/` | — |
+| QA system | ✅ SQLite results store + importer, deterministic failure taxonomy (14 categories, fault-injection tested), regression gate CLI (exit 1 on regression), read-only API, explorer page `/qa` | `evals/evals/qa/`, `frontend/src/app/qa`, `docs/QA.md` | `cd evals && uv run pytest -q tests/test_qa.py`; `uv run uvicorn evals.qa.api:app --port 8020` + http://localhost:3000/qa |
 
 ## 4. How the streams were briefed (re-brief a new agent with the same scope)
 - **B (backend):** tools → memory → Pydantic AI agent (`deps_type=RunDeps`, `output_type=AnswerSpec`, skills toolset
