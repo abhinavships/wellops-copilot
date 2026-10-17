@@ -1,3 +1,5 @@
+> How this maps onto harness engineering (Eval(M,H,E,B), frozen vs editable layers, verification, held-out split): [HARNESS.md](HARNESS.md)
+
 # WellOps Copilot: write-up
 
 FlytBase Hack Day, Asset Intelligence Copilot. A chat copilot over an oil-field dataset (200 wells, ~40k
