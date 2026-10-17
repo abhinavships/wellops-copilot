@@ -30,6 +30,7 @@ PROVIDERS = {  # provider -> (base_url, default Nemotron model id, settings attr
 }
 BASE_URL, _DEFAULT_MODEL, _KEY_ATTR = PROVIDERS[settings.hermes_provider]
 MODEL = settings.hermes_model or _DEFAULT_MODEL
+FAST = {"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}, "temperature": 0.2}  # Nemotron: no hidden reasoning
 HISTORY: dict[str, list[dict]] = {}  # chat_id -> Hermes (OpenAI-format) message history
 
 SYSTEM = """You are WellOps, an oil-field asset copilot. Today is {today}; the user is {principal}.
@@ -40,7 +41,9 @@ Rules:
 - After getting data, call show_visual with the result handle and the visual that fits (status_card for one well,
   bar for rankings, line for time series, map for locations, heatmap for area x month, kpi for one number).
   If the user asks for a specific chart, use exactly that type.
-- If the user corrects data or states a rule, call remember_correction, then re-run the affected query.
+- If the user says a value is WRONG (a reading, a status, a spill), call dispute_data first: it shows the proof
+  and Correct/Keep buttons. Say in one sentence what the evidence shows and ask if they still want it corrected.
+  Never correct data on the user's word alone. Rules or facts the user states (not disputes) go to remember_correction.
 - If notes and sensor data disagree, say so plainly and name both sources.
 - For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id.
 - Mention the key record id (e.g. INS-0001-0203) once, inline.
@@ -82,8 +85,7 @@ def _compose(deps: RunDeps, text: str) -> AnswerSpec:
                       assumptions=list(dict.fromkeys(n for r in results for n in r.notes))[:4])
 
 
-async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) -> AsyncIterator[str]:
-    yield _sse({"type": "RUN_STARTED", "threadId": thread_id, "runId": run_id})
+async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[dict]:
     history = HISTORY.get(deps.chat_id, [])
     system = SYSTEM.format(today=deps.today, principal=deps.principal)
     headers = {"X-User-Id": deps.principal, "X-Chat-Id": deps.chat_id, "X-Clock-Today": str(deps.today)}
@@ -93,30 +95,32 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
     for attempt in range(MAX_RETRIES + 1):
         req = dict(message=ask, history=final_msgs, system=system, headers=headers,
                    mcp_url="http://127.0.0.1:8000/mcp/", model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.hermes_provider,
+                   request_overrides=FAST if settings.hermes_provider == "nvidia" else None,
                    home=str(HERMES_DIR / "home" / re.sub(r"\W", "_", deps.chat_id)))
         mid, text, err = f"m-{uuid.uuid4().hex[:8]}", "", None
-        yield _sse({"type": "TEXT_MESSAGE_START", "messageId": mid, "role": "assistant"})
+        yield ({"type": "TEXT_MESSAGE_START", "messageId": mid, "role": "assistant"})
         async for ev in _run_hermes(req):
             k = ev.get("ev")
             if k == "tool_start":
-                yield _sse({"type": "TOOL_CALL_START", "toolCallId": ev["id"], "toolCallName": ev["name"].removeprefix("mcp__wellops__"), "parentMessageId": mid})
-                yield _sse({"type": "TOOL_CALL_ARGS", "toolCallId": ev["id"], "delta": json.dumps(ev.get("args"), default=str)})
-                yield _sse({"type": "TOOL_CALL_END", "toolCallId": ev["id"]})
+                yield ({"type": "TOOL_CALL_START", "toolCallId": ev["id"], "toolCallName": ev["name"].removeprefix("mcp__wellops__"), "parentMessageId": mid})
+                yield ({"type": "TOOL_CALL_ARGS", "toolCallId": ev["id"], "delta": json.dumps(ev.get("args"), default=str)})
+                yield ({"type": "TOOL_CALL_END", "toolCallId": ev["id"]})
             elif k == "tool_end":
-                yield _sse({"type": "TOOL_CALL_RESULT", "toolCallId": ev["id"], "messageId": mid, "content": ev.get("result", "")[:2000]})
+                yield ({"type": "TOOL_CALL_RESULT", "toolCallId": ev["id"], "messageId": mid, "content": ev.get("result", "")[:2000]})
             elif k == "delta":
                 text += ev["text"]
-                yield _sse({"type": "TEXT_MESSAGE_CONTENT", "messageId": mid, "delta": ev["text"]})
+                yield ({"type": "TEXT_MESSAGE_CONTENT", "messageId": mid, "delta": ev["text"]})
             elif k == "final":
                 text = ev.get("text") or text
                 final_msgs = ev.get("messages") or final_msgs
             elif k == "error":
                 err = ev["message"]
-        yield _sse({"type": "TEXT_MESSAGE_END", "messageId": mid})
+        yield ({"type": "TEXT_MESSAGE_END", "messageId": mid})
         if not err and re.match(r"API call failed|HTTP 4\d\d|Rate limit", text.strip()):
             err = text.strip()[:300]  # provider failure surfaced by Hermes as text: never present it as an answer
         if err:
-            yield _sse({"type": "RUN_ERROR", "message": f"Model provider: {err}" if "429" in err else f"Hermes: {err}"})
+            yield ({"type": "RUN_ERROR", "message": f"Model provider: {err}" if "429" in err else f"Hermes: {err}"})
+            state["error"] = True
             return
         spec = _compose(deps, text)
         results = mcp_server.TOOL_LOG.get(deps.chat_id, [])
@@ -134,9 +138,67 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
     HISTORY[deps.chat_id] = final_msgs
     record(deps, message, spec)
     last = attempts[-1]
-    yield _sse({"type": "CUSTOM", "name": "wellops.verification", "value": {
+    yield ({"type": "CUSTOM", "name": "wellops.verification", "value": {
         "ok": last.ok, "retries": len(attempts) - 1, "harness": "hermes-agent",
         "gates": [{"name": g.name, "ok": g.ok, "detail": "; ".join(g.details) or None} for g in last.gates]}})
-    yield _sse({"type": "CUSTOM", "name": "wellops.usage", "value": {"model": f"hermes-agent → {MODEL}"}})
-    yield _sse({"type": "CUSTOM", "name": "wellops.answer", "value": spec.model_dump(mode="json")})
+    yield ({"type": "CUSTOM", "name": "wellops.usage", "value": {"model": f"hermes-agent → {MODEL}"}})
+    yield ({"type": "CUSTOM", "name": "wellops.answer", "value": spec.model_dump(mode="json")})
+    state.update(ok=last.ok, spec=spec, retries=len(attempts) - 1)
+
+
+def _rehandle(deps: RunDeps, payload: dict) -> list[dict]:
+    """Register cached handle rows in this chat's store and rewrite handle ids in the replayed events."""
+    from wellops.tools.core import ToolOut
+    remap = {}
+    for old, (res, rows) in payload["handles"].items():
+        remap[old] = store().put(deps.chat_id, ToolOut.model_validate(res), rows)
+    out = json.dumps(payload["events"])
+    for old, new in sorted(remap.items(), key=lambda kv: -len(kv[0])):
+        out = re.sub(rf'"{old}"', f'"{new}"', out)
+    return json.loads(out)
+
+
+async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) -> AsyncIterator[str]:
+    """AG-UI stream with a SQLite hot cache in front and a measured run trace (wellops.trace) for the UI."""
+    import time
+    from wellops import cache
+    yield _sse({"type": "RUN_STARTED", "threadId": thread_id, "runId": run_id})
+    t0 = time.perf_counter()
+    key = cache.turn_key(message, deps.principal, deps.today)
+    hit = cache.get_turn(key)
+    if hit:
+        events = _rehandle(deps, hit)
+        for ev in events:
+            yield _sse(ev)
+        ms = int((time.perf_counter() - t0) * 1000)
+        yield _sse({"type": "CUSTOM", "name": "wellops.cache", "value": {"hit": True, "ms": ms, "saved_ms": hit["ms"]}})
+        spec = next((e["value"] for e in events if e.get("name") == "wellops.answer"), None)
+        if spec:
+            record(deps, message, AnswerSpec.model_validate(spec))
+        yield _sse({"type": "RUN_FINISHED", "threadId": thread_id, "runId": run_id})
+        return
+    state: dict = {}
+    events, steps, starts = [], [], {}
+    async for ev in _live_turn(deps, message, state):
+        now = time.perf_counter()
+        if ev["type"] == "TOOL_CALL_START":
+            starts[ev["toolCallId"]] = (ev["toolCallName"], now)
+        elif ev["type"] == "TOOL_CALL_RESULT" and ev["toolCallId"] in starts:
+            name, st = starts.pop(ev["toolCallId"])
+            steps.append({"name": name, "ms": int((now - st) * 1000), "ok": '"error"' not in ev.get("content", "")[:40]})
+        elif ev.get("name") == "wellops.verification":
+            v = ev["value"]
+            steps.append({"name": "verify", "ms": 0, "ok": v["ok"], "detail": f"{sum(g['ok'] for g in v['gates'])}/{len(v['gates'])} gates"
+                          + (f", {v['retries']} retried" if v["retries"] else "")})
+        events.append(ev)
+        yield _sse(ev)
+    ms = int((time.perf_counter() - t0) * 1000)
+    trace = {"type": "CUSTOM", "name": "wellops.trace", "value": {"steps": steps, "total_ms": ms}}
+    yield _sse(trace)
+    if state.get("ok") and state.get("spec"):
+        sp = state["spec"]
+        handles = {h: (st.result.model_dump(mode="json"), st.rows) for h in
+                   {v.handle for v in sp.visuals if v.handle} | {c.handle for c in sp.claims}
+                   if (st := store().get(deps.chat_id, h))}
+        cache.put_turn(key, message, {"events": [*events, trace], "handles": handles}, ms)
     yield _sse({"type": "RUN_FINISHED", "threadId": thread_id, "runId": run_id})

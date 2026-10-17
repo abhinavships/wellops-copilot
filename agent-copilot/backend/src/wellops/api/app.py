@@ -182,6 +182,17 @@ def get_record(kind: str, rid: str) -> dict:
     return {"kind": kind, "id": rid, "record": rows[0] if len(rows) == 1 else rows}
 
 
+@app.post("/api/disputes/{dispute_id}/resolve")
+async def resolve(dispute_id: str, request: Request) -> dict:
+    """Human-in-the-loop decision on a proof card: {action: correct|keep, value?}. No model call."""
+    from wellops.memory.disputes import resolve_dispute
+    body = await request.json()
+    try:
+        return resolve_dispute(deps_from(request), dispute_id, body.get("action", ""), body.get("value"))
+    except ToolError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.get("/api/health")
 def health() -> dict:
     n = get_db().rows("SELECT count(*) n FROM wells WHERE dataset_id=?", [settings.active_dataset])[0]["n"]

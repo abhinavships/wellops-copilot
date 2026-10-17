@@ -46,6 +46,7 @@ def main() -> None:
             api_key=req["api_key"], base_url=base_url,
             enabled_toolsets=["mcp-wellops"], quiet_mode=True, skip_context_files=True, skip_memory=True,
             max_iterations=int(req.get("max_iterations", 12)), tool_delay=0.0, platform="api",
+            request_overrides=req.get("request_overrides") or None,
             tool_start_callback=lambda tid, name, args: out(ev="tool_start", id=tid, name=name, args=args),
             tool_complete_callback=lambda tid, name, args, res: out(ev="tool_end", id=tid, name=name, result=str(res)[:4000]),
             stream_delta_callback=lambda d: d and out(ev="delta", text=d),

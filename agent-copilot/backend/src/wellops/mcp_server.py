@@ -143,6 +143,22 @@ def remember_correction(ctx: Context, kind: str, scope_level: str, scope_key: st
 
 
 @mcp.tool()
+def dispute_data(ctx: Context, record_id: str, attr: str, claimed_value: str | None = None, reason: str | None = None) -> str:
+    """The user says a value is WRONG. Do NOT correct it yet: this pulls the proof (raw record, who recorded it,
+    the rule applied, field notes, earlier corrections) and shows the user a proof card with Correct/Keep buttons.
+    record_id: a well id or INS- id. attr: producing | wellhead_temp_c | ambient_temp_c | spill_est_volume_bbl | spill.
+    Then answer in one sentence summarising what the evidence says and ask whether to correct it."""
+    from wellops.memory.disputes import open_dispute
+    deps = _deps(ctx)
+    try:
+        d = open_dispute(deps, record_id, attr, claimed_value, reason)
+    except ToolError as e:
+        return json.dumps({"error": str(e)})
+    UI_QUEUE.setdefault(deps.chat_id, []).append(Visual(type="dispute", title=f"Proof · {d['record']['id']}", encodings=d))
+    return json.dumps({k: d[k] for k in ("dispute_id", "current_value", "claimed_value", "verdict_hint", "evidence")}, default=str)
+
+
+@mcp.tool()
 def recall_conversations(ctx: Context, query: str) -> str:
     """Earlier conversations of THIS user (e.g. 'the wells we discussed yesterday')."""
     return _out(ctx, memory.recall_episodes, query, None)
@@ -188,7 +204,7 @@ def generate_image(ctx: Context, prompt: str, width: int = 768, height: int = 51
 
 
 VisualT = Literal["status_card", "table", "line", "bar", "map", "heatmap", "obligation_timeline", "evidence_chain",
-                  "conflict_card", "correction_diff", "kpi", "gauge", "timeline", "image", "ingest_report", "none"]
+                  "conflict_card", "correction_diff", "dispute", "kpi", "gauge", "timeline", "image", "ingest_report", "none"]
 
 
 @mcp.tool()
