@@ -1,0 +1,35 @@
+{
+  "name": "wellops-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "sync-maplibre": "node scripts/sync-maplibre.mjs",
+    "predev": "npm run sync-maplibre",
+    "prebuild": "npm run sync-maplibre",
+    "dev": "next dev",
+    "dev:mock": "npm run sync-maplibre && NEXT_PUBLIC_MOCK=1 next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "shots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.14.0",
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "autoprefixer": "10.6.1",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.4.2",
+    "playwright": "1.64.1",
+    "postcss": "8.5.30",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.9.3"
+  }
+}

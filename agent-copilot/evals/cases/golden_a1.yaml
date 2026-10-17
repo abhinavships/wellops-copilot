@@ -1,0 +1,232 @@
+# Golden A1: single-user questions Q1-Q10 (dataset/03-evaluation-queries.md). Expected values are the KEY, i.e. hypotheses:
+# evals.truth.audit recomputes them from the substrate and reports agrees / disagrees_with_key / not_computable.
+- id: Q01
+  suite: golden
+  title: Is WELL-0001 producing oil right now? (status card)
+  source: dataset/03-evaluation-queries.md#Q1
+  tags: [a1, status, notes, stale-status]
+  turns:
+    - user: U-201
+      chat: chat-q01
+      clock: "2026-10-17"
+      say: "Is WELL-0001 producing oil right now? When was it last inspected, and by whom? Show me its status card."
+      truth: {fn: well_status, args: {well: WELL-0001}}
+      expect:
+        ids_exact: [INS-0001-0203]
+        numbers: [{label: delta_c, value: 3.2, tol: 0.05}]
+        dates: ["2026-10-15"]
+        text: [Ryan Brooks, Jake Morales, out of date]
+        visual: [status_card]
+        must_cite: [INS-0001-0203, CTX-0001-003]
+        may_cite: [CTX-0001-002, WELL-0001]
+- id: Q02
+  suite: golden
+  title: Not-producing wells in Northeast Block 8 and why (table)
+  source: dataset/03-evaluation-queries.md#Q2
+  tags: [a1, area, table, no-invented-cause]
+  turns:
+    - user: U-201
+      chat: chat-q02
+      clock: "2026-10-17"
+      say: "Which wells in Northeast Block 8 are not producing oil right now, and why? Show them in a table."
+      truth: {fn: area_not_producing, args: {area: Northeast Block 8}}
+      expect:
+        set_equals: [WELL-0164, WELL-0170, WELL-0172, WELL-0175]
+        ids_exact: [MNT-0170-031, MNT-0172-028]
+        numbers:
+          - {label: "delta:WELL-0164", value: 4.1, tol: 0.05}
+          - {label: "delta:WELL-0170", value: 2.9, tol: 0.05}
+          - {label: "delta:WELL-0172", value: 5.7, tol: 0.05}
+          - {label: "delta:WELL-0175", value: 0.4, tol: 0.05}
+        text: [No recorded reason, Pump jack not moving, out of date]
+        visual: [table]
+        must_cite: [MNT-0170-031, MNT-0172-028, INS-0164-0205, INS-0175-0204]
+- id: Q03
+  suite: golden
+  title: WELL-0001 wellhead vs air, last 13 weeks, not-producing marked (line)
+  source: dataset/03-evaluation-queries.md#Q3
+  tags: [a1, timeseries, line]
+  turns:
+    - user: U-201
+      chat: chat-q03
+      clock: "2026-10-17"
+      say: "Show a line chart of WELL-0001's wellhead temperature against air temperature for the last 13 weeks, and mark when it was not producing oil."
+      truth: {fn: series, args: {well: WELL-0001, weeks: 13}}
+      expect:
+        numbers: [{label: readings, value: 13, tol: 0}]
+        dates: ["2026-10-08", "2026-10-15"]
+        visual: [line]
+        must_cite: [INS-0001-0203]
+- id: Q04
+  suite: golden
+  title: WELL-0001 spills in 4 years, corrected detection excluded (table)
+  source: dataset/03-evaluation-queries.md#Q4
+  tags: [a1, spills, correction, table]
+  turns:
+    - user: U-201
+      chat: chat-q04
+      clock: "2026-10-17"
+      say: "How many oil spills has WELL-0001 had in the last 4 years, and how much oil in total? List them in a table."
+      truth: {fn: spills_well, args: {well: WELL-0001, years: 4}}
+      expect:
+        numbers: [{label: count, value: 6, tol: 0}, {label: total_bbl, value: 15.1, tol: 0.05}]
+        dates: ["2023-03-16", "2023-04-27", "2023-09-28", "2023-10-19", "2026-06-11", "2026-10-01"]
+        text: [INS-0001-0070]
+        visual: [table]
+        must_cite: [CTX-0001-001, INS-0001-0185, INS-0001-0201]
+        may_cite: [INS-0001-0070]
+- id: Q05
+  suite: golden
+  title: WELL-0001 downtime in 2025 (hot but idle wellhead)
+  source: dataset/03-evaluation-queries.md#Q5
+  tags: [a1, downtime, hot-idle]
+  turns:
+    - user: U-201
+      chat: chat-q05
+      clock: "2026-10-17"
+      say: "How many days was WELL-0001 down in 2025?"
+      truth: {fn: downtime_days, args: {well: WELL-0001, year: 2025}}
+      expect:
+        numbers: [{label: days, value: 21, tol: 0}]
+        dates: ["2025-07-24", "2025-10-16", "2025-10-23"]
+        visual: [none, table, line]
+        must_cite: [MNT-0001-021, MNT-0001-023]
+        may_cite: [INS-0001-0140, INS-0001-0152, INS-0001-0153]
+- id: Q06
+  suite: golden
+  title: Top 3 downtime wells in Northeast Block 7, last 4 months (bar)
+  source: dataset/03-evaluation-queries.md#Q6
+  tags: [a1, downtime, area, bar]
+  turns:
+    - user: U-201
+      chat: chat-q06
+      clock: "2026-10-17"
+      say: "Which 3 wells in Northeast Block 7 had the most downtime in the last 4 months? Show a bar chart."
+      truth: {fn: top_downtime, args: {area: Northeast Block 7, k: 3, since: "2026-06-16", until: "2026-10-16"}}
+      expect:
+        set_equals: [WELL-0121, WELL-0138, WELL-0107]
+        numbers:
+          - {label: "days:WELL-0121", value: 49, tol: 0}
+          - {label: "days:WELL-0138", value: 42, tol: 0}
+          - {label: "days:WELL-0107", value: 42, tol: 0}
+        visual: [bar]
+        must_cite: [WELL-0121, WELL-0138, WELL-0107]
+- id: Q07
+  suite: golden
+  title: Map of real spills in Northeast Block 8, last 90 days
+  source: dataset/03-evaluation-queries.md#Q7
+  tags: [a1, spills, map]
+  turns:
+    - user: U-201
+      chat: chat-q07
+      clock: "2026-10-17"
+      say: "Show on a map every well in Northeast Block 8 with a real spill in the last 90 days."
+      truth: {fn: spills_map, args: {area: Northeast Block 8, days: 90}}
+      expect:
+        set_equals: [WELL-0151, WELL-0165, WELL-0175, WELL-0186]
+        numbers:
+          - {label: "bbl:WELL-0151", value: 4.5, tol: 0.05}
+          - {label: "bbl:WELL-0165", value: 1.2, tol: 0.05}
+          - {label: "bbl:WELL-0175", value: 3.9, tol: 0.05}
+          - {label: "bbl:WELL-0186", value: 0.6, tol: 0.05}
+        dates: ["2026-09-24", "2026-07-30", "2026-07-23"]
+        visual: [map]
+        must_cite: [INS-0151-0201, INS-0165-0194, INS-0175-0193, INS-0186-0097]
+- id: Q08
+  suite: golden
+  title: Heatmap of 2026 spills by area and month
+  source: dataset/03-evaluation-queries.md#Q8
+  tags: [a1, spills, heatmap, correction]
+  turns:
+    - user: U-201
+      chat: chat-q08
+      clock: "2026-10-17"
+      say: "Show a heatmap of 2026 spills by geographic area and month."
+      truth: {fn: spills_heatmap, args: {year: 2026}}
+      expect:
+        numbers:
+        - {label: "Southwest Block 23|1", value: 4}
+        - {label: "Southwest Block 23|2", value: 3}
+        - {label: "Southwest Block 23|3", value: 3}
+        - {label: "Southwest Block 23|4", value: 6}
+        - {label: "Southwest Block 23|5", value: 3}
+        - {label: "Southwest Block 23|6", value: 4}
+        - {label: "Southwest Block 23|7", value: 4}
+        - {label: "Southwest Block 23|8", value: 3}
+        - {label: "Southwest Block 23|9", value: 3}
+        - {label: "Southwest Block 23|10", value: 2}
+        - {label: "total|Southwest Block 23", value: 35}
+        - {label: "Southwest Block 24|1", value: 7}
+        - {label: "Southwest Block 24|2", value: 4}
+        - {label: "Southwest Block 24|3", value: 5}
+        - {label: "Southwest Block 24|4", value: 6}
+        - {label: "Southwest Block 24|5", value: 5}
+        - {label: "Southwest Block 24|6", value: 5}
+        - {label: "Southwest Block 24|7", value: 3}
+        - {label: "Southwest Block 24|8", value: 1}
+        - {label: "Southwest Block 24|9", value: 5}
+        - {label: "Southwest Block 24|10", value: 2}
+        - {label: "total|Southwest Block 24", value: 43}
+        - {label: "Northeast Block 7|1", value: 5}
+        - {label: "Northeast Block 7|2", value: 3}
+        - {label: "Northeast Block 7|3", value: 2}
+        - {label: "Northeast Block 7|4", value: 4}
+        - {label: "Northeast Block 7|5", value: 6}
+        - {label: "Northeast Block 7|6", value: 6}
+        - {label: "Northeast Block 7|7", value: 2}
+        - {label: "Northeast Block 7|8", value: 4}
+        - {label: "Northeast Block 7|9", value: 4}
+        - {label: "Northeast Block 7|10", value: 1}
+        - {label: "total|Northeast Block 7", value: 37}
+        - {label: "Northeast Block 8|1", value: 4}
+        - {label: "Northeast Block 8|2", value: 4}
+        - {label: "Northeast Block 8|3", value: 4}
+        - {label: "Northeast Block 8|4", value: 3}
+        - {label: "Northeast Block 8|5", value: 2}
+        - {label: "Northeast Block 8|6", value: 4}
+        - {label: "Northeast Block 8|7", value: 4}
+        - {label: "Northeast Block 8|8", value: 0}
+        - {label: "Northeast Block 8|9", value: 1}
+        - {label: "Northeast Block 8|10", value: 0}
+        - {label: "total|Northeast Block 8", value: 26}
+        text: [Southwest Block 23, Southwest Block 24, Northeast Block 7, Northeast Block 8]
+        visual: [heatmap]
+- id: Q09
+  suite: golden
+  title: Rules WELL-0001 broke in the last 12 months and what is still open
+  source: dataset/03-evaluation-queries.md#Q9
+  tags: [a1, compliance, report-only-facts, obligations]
+  turns:
+    - user: U-201
+      chat: chat-q09
+      clock: "2026-10-17"
+      say: "Which rules has WELL-0001 broken in the last 12 months, and what is still open?"
+      truth: {fn: rules_broken, args: {well: WELL-0001, months: 12}}
+      expect:
+        numbers:
+          - {label: sr01_hours, value: 41, tol: 0}
+          - {label: sr02_hours, value: 7, tol: 0.5}
+          - {label: fine_usd, value: 5000, tol: 0}
+          - {label: rca_flowline_corrective, value: 3, tol: 0}
+        dates: ["2026-08-10", "2026-07-30", "2026-03-07"]
+        ids_exact: [MNT-0001-028, MNT-0001-029, MNT-0001-032]
+        text: [SR-01, SR-02, SR-03, RC-04, RC-02, root-cause, CTX-0001-003]
+        visual: [table, obligation_timeline]
+        must_cite: [REG-0001-001, REG-0001-002, REG-0001-003, MNT-0001-026, MNT-0001-032, CTX-0001-003]
+        may_cite: [MNT-0001-028, MNT-0001-029, INS-0001-0185]
+- id: Q10
+  suite: golden
+  title: SW-24 spills in last 90 days not contained within 4 h (report-only fact)
+  source: dataset/03-evaluation-queries.md#Q10
+  tags: [a1, compliance, report-only-facts, table]
+  turns:
+    - user: U-101
+      chat: chat-q10
+      clock: "2026-10-17"
+      say: "In Southwest Block 24, which spills in the last 90 days were not contained within the SOP time limit?"
+      truth: {fn: containment_breaches, args: {area: Southwest Block 24, days: 90}}
+      expect:
+        set_equals: [WELL-0082, WELL-0100]
+        numbers: [{label: "hours:WELL-0082", value: 7.1, tol: 0.05}, {label: "hours:WELL-0100", value: 8.1, tol: 0.05}]
+        visual: [table]
+        must_cite: [MNT-0082-028, INS-0082-0198, MNT-0100-034, INS-0100-0196]

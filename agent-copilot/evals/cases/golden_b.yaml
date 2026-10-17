@@ -1,0 +1,156 @@
+# Golden B: several users (Q15-Q18). Each episode is self-contained: prerequisite turns are replayed with setup: true.
+- id: Q15
+  suite: golden
+  title: A correction reaches other users (follows Q12 and Q13)
+  source: dataset/03-evaluation-queries.md#Q15
+  tags: [b, multi-user, overlay, conflict]
+  turns:
+    - id: setup-q12
+      setup: true
+      user: U-201
+      chat: chat-q15-m1
+      clock: "2026-10-17"
+      say: "The 15 Oct reading for WELL-0164 is wrong. The handheld thermal gun used in that inspection was faulty; the field crew re-measured the wellhead at 41.0 °C."
+    - id: setup-q13
+      setup: true
+      user: U-201
+      chat: chat-q15-m2
+      clock: "2026-10-17"
+      say: "The AI estimated the 24 Sep spill at WELL-0151 as 4.5 bbl. The field crew measured 5.4 bbl."
+    - id: jessica
+      user: U-202
+      chat: chat-q15-jr
+      clock: "2026-10-18"
+      say: "Is WELL-0164 producing oil right now?"
+      truth:
+        fn: well_status
+        args: {well: WELL-0164, clock: "2026-10-18"}
+        overlays: [{kind: value_correction, scope_level: inspection, scope_key: INS-0164-0205, target_attr: wellhead_temp_c, value_num: 41.0, original_num: 24.0, author: U-201, reason: faulty thermal gun}]
+      expect:
+        numbers: [{label: delta_c, value: 21.1, tol: 0.05}]
+        text: [Michael Turner, Pump jack not moving, corrected]
+        must_disclose_overlay: Michael Turner
+        must_flag_conflict: {required: true, keywords: [Pump jack not moving]}
+        visual: [status_card, conflict_card, correction_diff]
+        must_cite: [INS-0164-0205]
+    - id: laura
+      user: U-401
+      chat: chat-q15-ls
+      clock: "2026-10-18"
+      say: "Which spills in Northeast Block 8 in the last 90 days needed a report to the regulator?"
+      truth: {fn: reportable_spills, args: {area: Northeast Block 8, days: 90, today: "2026-10-18"}, overlays: [{kind: analysis_correction, scope_level: inspection, scope_key: INS-0151-0201, target_attr: spill_est_volume_bbl, value_num: 5.4, original_num: 4.5, author: U-201, reason: field crew measurement}]}
+      expect:
+        set_equals: [WELL-0151]
+        numbers: [{label: "bbl:WELL-0151", value: 5.4, tol: 0.05}]
+        text: [overdue, no written notice, Michael Turner]
+        must_disclose_overlay: Michael Turner
+        visual: [table, obligation_timeline]
+        must_cite: [INS-0151-0201]
+- id: Q16
+  suite: golden
+  title: Shared knowledge, private memory (no leak of Michael's history to Jessica)
+  source: dataset/03-evaluation-queries.md#Q16
+  tags: [b, multi-user, privacy, leak, memory]
+  turns:
+    - id: setup-q11-d1
+      setup: true
+      user: U-201
+      chat: chat-q16-m1
+      clock: "2026-10-17"
+      say: "Which 3 wells in Northeast Block 7 had the most downtime in the last 4 months? Show a bar chart."
+    - id: setup-q11-d2
+      setup: true
+      user: U-201
+      chat: chat-q16-m2
+      clock: "2026-10-18"
+      say: "For the three wells we discussed yesterday, what have repairs cost this year?"
+    - id: jake-shares
+      user: U-102
+      chat: chat-q16-jm
+      clock: "2026-10-17"
+      say: "FYI for everyone: WELL-0007 will be shut in from 17 Oct for a 10-day planned workover."
+      expect:
+        ids_exact: [WELL-0007]
+        text: [Jake Morales]
+        dates: ["2026-10-17"]
+        memory_write: {kind: planned_downtime, scope: well, key: WELL-0007}
+    - id: michael-asks
+      user: U-201
+      chat: chat-q16-m3
+      clock: "2026-10-18"
+      say: "Is any downtime planned for WELL-0007?"
+      expect:
+        ids_exact: [WELL-0007]
+        text: [Jake Morales, 10 days]
+        dates: ["2026-10-17"]
+        numbers: [{label: planned_days, value: 10, tol: 0}]
+    - id: jessica-asks
+      user: U-202
+      chat: chat-q16-jr
+      clock: "2026-10-18"
+      say: "For the three wells we discussed yesterday, what have repairs cost this year?"
+      expect:
+        must_say_no_prior_conversation: true
+        must_not_contain: [WELL-0121, WELL-0138, WELL-0107, "25,794", "46,942", "5,176", "25794", "46942", "5176"]
+- id: Q17
+  suite: golden
+  title: People disagree with the data (claims stay unconfirmed, both kept)
+  source: dataset/03-evaluation-queries.md#Q17
+  tags: [b, multi-user, conflict, claims]
+  turns:
+    - id: michael-claim
+      setup: true
+      user: U-201
+      chat: chat-q17-m
+      clock: "2026-10-17"
+      say: "WELL-0175 has been shut in for planned work since 14 Oct."
+    - id: tyler-claim
+      user: U-204
+      chat: chat-q17-th
+      clock: "2026-10-17"
+      say: "WELL-0175 is running fine."
+      truth: {fn: well_status, args: {well: WELL-0175}}
+      expect:
+        ids_exact: [INS-0175-0204]
+        numbers: [{label: delta_c, value: 0.4, tol: 0.05}]
+        dates: ["2026-10-15"]
+        text: [Jessica Reed, Michael Turner, not producing, confirm]
+        must_say_unconfirmed: true
+        must_flag_conflict: {required: true, keywords: [Michael Turner, Tyler Hughes]}
+        visual: [conflict_card, status_card]
+        must_cite: [INS-0175-0204]
+        memory_write: {kind: status_claim, scope: well, key: WELL-0175}
+    - id: jake-claim
+      user: U-102
+      chat: chat-q17-jm
+      clock: "2026-10-17"
+      say: "WELL-0001 is back online since 14 Oct."
+      truth: {fn: well_status, args: {well: WELL-0001}}
+      expect:
+        ids_exact: [INS-0001-0203]
+        numbers: [{label: delta_c, value: 3.2, tol: 0.05}]
+        dates: ["2026-10-15", "2026-10-20"]
+        text: [not producing, CTX-0001-003]
+        must_say_unconfirmed: true
+        must_flag_conflict: {required: true, keywords: [CTX-0001-003]}
+        visual: [conflict_card, status_card]
+        must_cite: [INS-0001-0203, CTX-0001-003]
+        memory_write: {kind: status_claim, scope: well, key: WELL-0001}
+- id: Q18
+  suite: golden
+  title: People disagree about the AI's analysis (was the 20 Aug spill real?)
+  source: dataset/03-evaluation-queries.md#Q18
+  tags: [b, conflict, notes-not-corrections]
+  turns:
+    - user: U-201
+      chat: chat-q18
+      clock: "2026-10-17"
+      say: "Was the 20 Aug spill at WELL-0101 real oil?"
+      truth: {fn: spill_detection_state, args: {inspection: INS-0101-0197}}
+      expect:
+        ids_exact: [INS-0101-0197, MNT-0101-029]
+        numbers: [{label: volume_bbl, value: 1.0, tol: 0.05}]
+        text: [Ryan Brooks, Chris Dalton, "yes", Oil sheen around cellar]
+        must_flag_conflict: {required: true, keywords: [CTX-0101-002, CTX-0101-003]}
+        visual: [conflict_card, evidence_chain]
+        must_cite: [INS-0101-0197, CTX-0101-002, CTX-0101-003, MNT-0101-029]

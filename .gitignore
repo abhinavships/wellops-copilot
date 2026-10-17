@@ -6,3 +6,6 @@ agent-copilot/dataset/
 *.duckdb.wal
 node_modules/
 .next/
+**/.cache/
+**/test-results/
+**/playwright-report/

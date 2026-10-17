@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WellOps eval case (multi-turn, multi-principal episode)",
+  "type": "object",
+  "required": ["id", "suite", "title", "turns"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string"},
+    "suite": {"enum": ["golden", "synthetic", "mutated"]},
+    "title": {"type": "string"},
+    "source": {"type": "string", "description": "e.g. dataset/03-evaluation-queries.md#Q6"},
+    "description": {"type": "string"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "dataset": {"type": "string", "default": "sample"},
+    "turns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/turn"}}
+  },
+  "$defs": {
+    "turn": {
+      "type": "object",
+      "required": ["user", "chat", "clock", "say"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "user": {"type": "string", "pattern": "^U-\\d{3}$"},
+        "chat": {"type": "string"},
+        "clock": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "say": {"type": "string", "minLength": 1},
+        "setup": {"type": "boolean", "description": "run against the target but do not score"},
+        "truth": {"$ref": "#/$defs/truth"},
+        "expect": {"$ref": "#/$defs/expect"}
+      }
+    },
+    "truth": {
+      "type": "object",
+      "required": ["fn"],
+      "additionalProperties": false,
+      "properties": {
+        "fn": {"type": "string"},
+        "args": {"type": "object"},
+        "overlays": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ids_exact": {"type": "array", "items": {"type": "string"}},
+        "set_equals": {
+          "oneOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"type": "object", "required": ["ids"], "additionalProperties": false,
+             "properties": {"ids": {"type": "array", "items": {"type": "string"}},
+                            "allowed_extra": {"type": "array", "items": {"type": "string"}}}}
+          ]
+        },
+        "numbers": {"type": "array", "items": {"type": "object", "required": ["value", "label"],
+                    "additionalProperties": false,
+                    "properties": {"value": {"type": "number"}, "tol": {"type": "number", "minimum": 0},
+                                   "label": {"type": "string"}}}},
+        "dates": {"type": "array", "items": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}},
+        "text": {"type": "array", "items": {"type": "string"}, "description": "names/phrases that must appear"},
+        "visual": {"type": "array", "items": {"enum": ["status_card", "table", "line", "bar", "map", "heatmap",
+                   "obligation_timeline", "correction_diff", "conflict_card", "evidence_chain", "none"]}},
+        "must_cite": {"type": "array", "items": {"type": "string"}},
+        "may_cite": {"type": "array", "items": {"type": "string"}},
+        "must_flag_conflict": {"type": "object", "required": ["required"], "additionalProperties": false,
+                    "properties": {"required": {"type": "boolean"}, "keywords": {"type": "array", "items": {"type": "string"}}}},
+        "must_disclose_overlay": {"type": "string"},
+        "must_not_contain": {"type": "array", "items": {"type": "string"}},
+        "must_say_unconfirmed": {"type": "boolean"},
+        "must_say_no_prior_conversation": {"type": "boolean"},
+        "memory_write": {"type": "object", "required": ["kind", "scope", "key"], "additionalProperties": false,
+                    "properties": {"kind": {"type": "string"}, "scope": {"type": "string"}, "key": {"type": "string"},
+                                   "attr": {"type": "string"}, "original": {"type": ["number", "string", "null"]},
+                                   "value": {"type": ["number", "string", "null"]}}},
+        "max_steps": {"type": "integer", "minimum": 1},
+        "tools_any": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

@@ -6,9 +6,15 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "duckdb>=1.5.6",
+    "fastapi>=0.143.3",
+    "httpx>=0.28.1",
+    "logfire>=5.2.0",
     "pydantic>=2.14.1",
+    "pydantic-ai-slim[ag-ui,openai,openrouter]>=2.57.0",
     "pydantic-settings>=2.16.0",
+    "pytz>=2026.5",
     "pyyaml>=6.0.3",
+    "uvicorn>=0.54.0",
 ]
 
 [build-system]

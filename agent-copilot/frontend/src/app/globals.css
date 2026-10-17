@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 246 247 249; --panel: 255 255 255; --raised: 241 243 246; --line: 218 222 229;
+  --fg: 22 28 38; --muted: 98 108 124; --accent: 20 94 190; --accent-fg: 255 255 255;
+  --ok: 18 128 76; --warn: 176 102 0; --bad: 192 38 52; --info: 20 94 190;
+  --c1: 20 94 190; --c2: 217 119 6; --c3: 15 150 110; --c4: 150 70 190;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: 13 17 23; --panel: 22 27 34; --raised: 31 38 48; --line: 48 56 68;
+    --fg: 230 235 242; --muted: 148 160 176; --accent: 96 165 250; --accent-fg: 8 12 20;
+    --ok: 74 205 140; --warn: 245 170 60; --bad: 255 120 130; --info: 96 165 250;
+    --c1: 96 165 250; --c2: 251 191 36; --c3: 52 211 153; --c4: 192 132 252;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: 13 17 23; --panel: 22 27 34; --raised: 31 38 48; --line: 48 56 68;
+  --fg: 230 235 242; --muted: 148 160 176; --accent: 96 165 250; --accent-fg: 8 12 20;
+  --ok: 74 205 140; --warn: 245 170 60; --bad: 255 120 130; --info: 96 165 250;
+  --c1: 96 165 250; --c2: 251 191 36; --c3: 52 211 153; --c4: 192 132 252;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: rgb(var(--bg)); color: rgb(var(--fg)); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; border-radius: 4px; }
+.prose-chat p { margin: 0 0 .6rem; line-height: 1.55; }
+.prose-chat ul { list-style: disc; padding-left: 1.2rem; margin: 0 0 .6rem; }
+.prose-chat ol { list-style: decimal; padding-left: 1.2rem; margin: 0 0 .6rem; }
+.prose-chat strong { font-weight: 600; }
+.prose-chat code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; background: rgb(var(--raised)); padding: 0 .25rem; border-radius: 4px; }
+.prose-chat table { border-collapse: collapse; margin: .5rem 0; font-size: .85rem; }
+.prose-chat th, .prose-chat td { border: 1px solid rgb(var(--line)); padding: .25rem .5rem; }
+.dots span { animation: blink 1.2s infinite both; }
+.dots span:nth-child(2) { animation-delay: .2s; } .dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .2 } 40% { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+.maplibregl-map { font-family: inherit; }

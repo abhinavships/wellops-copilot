@@ -17,6 +17,17 @@ class Settings(BaseSettings):
 
     model_orchestrator: str = "openrouter:nvidia/nemotron-3-super-120b-a12b:free"
     model_worker: str = "openrouter:poolside/laguna-s-2.1:free"
+    model_local: str = ""
+    model_fallbacks: str = ""  # comma-separated, tried in order (FallbackModel)
+    ollama_base_url: str = ""
+    openrouter_api_key: str = ""
+    opik_api_key: str = ""
+    otel_exporter_otlp_endpoint: str = ""
+
+    @property
+    def fallback_models(self) -> list[str]:
+        listed = [m.strip() for m in self.model_fallbacks.split(",") if m.strip()]
+        return listed or [self.model_orchestrator, self.model_worker]
 
 
 settings = Settings()
