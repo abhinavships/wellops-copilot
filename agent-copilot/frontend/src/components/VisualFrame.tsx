@@ -5,6 +5,7 @@ import { fetchHandle, rowsAsObjects } from "@/lib/api";
 import { Badge, Card, CitationChip, useUi } from "@/components/ui";
 import { VISUALS, type VisualProps } from "@/components/visuals";
 import { titleCase } from "@/lib/format";
+import { isPinned, pin, sourceKey, useBoard } from "@/lib/board";
 
 export function VisualFrame({ visual, answer }: { visual: Visual; answer: AnswerSpec }) {
   const { ctx } = useUi();
@@ -19,6 +20,8 @@ export function VisualFrame({ visual, answer }: { visual: Visual; answer: Answer
     return () => { live = false; };
   }, [visual.handle, ctx.chatId]);
 
+  useBoard(); // re-render when the board changes so the pin state stays current
+  const pinned = isPinned(ctx.chatId, sourceKey(visual));
   const Comp = VISUALS[visual.type] as React.ComponentType<VisualProps> | undefined;
   const rows = useMemo(() => (data ? rowsAsObjects(data) : []), [data]);
   if (visual.type === "none") return null;
@@ -33,6 +36,9 @@ export function VisualFrame({ visual, answer }: { visual: Visual; answer: Answer
           <span className="flex items-center gap-1.5">
             {visual.requested_by_user && <Badge tone="info" title="You asked for this visual">as requested</Badge>}
             <span className="font-mono text-[10px] uppercase tracking-wide text-muted">{visual.type.replace("_", " ")}{visual.handle ? ` · ${visual.handle}` : ""}</span>
+            <button type="button" disabled={pinned} onClick={() => pin(ctx.chatId, sourceKey(visual), visual, answer)} data-testid="pin"
+              className="rounded-md border border-line px-2 py-0.5 text-[11px] font-semibold hover:border-accent hover:text-accent disabled:cursor-default disabled:opacity-60">
+              {pinned ? "On board" : "Pin to board"}</button>
           </span>
         </figcaption>
         <div className="p-3">

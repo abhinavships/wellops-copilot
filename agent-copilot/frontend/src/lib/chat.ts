@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AguiEvent, AnswerSpec, CapabilityEvent, Conflict, ToolResult, UsageEvent, VerificationEvent } from "@/contracts";
 import { runAgent, uid } from "@/lib/agui";
 import type { Ctx } from "@/lib/api";
+import { pin, sourceKey } from "@/lib/board";
 
 export interface ToolCall {
   id: string; name: string; argsText: string; startedAt: number; endedAt?: number;
@@ -88,7 +89,13 @@ export function useChat(ctx: Ctx) {
     };
     try {
       const input = { threadId: c.chatId, runId: uid(), state: {}, messages: [...history, { id: uid(), role: "user" as const, content: text }], tools: [], context: [], forwardedProps: scenario ? { scenario } : {} };
-      for await (const ev of runAgent(input, c, ctl.signal)) patch((t) => reduceEvent(t, ev), ev.type === "RUN_FINISHED" || ev.type === "RUN_ERROR");
+      for await (const ev of runAgent(input, c, ctl.signal)) {
+        patch((t) => reduceEvent(t, ev), ev.type === "RUN_FINISHED" || ev.type === "RUN_ERROR");
+        if (ev.type === "CUSTOM" && ev.name === "wellops.answer") { // every answer's visuals land on the playboard
+          const a = ev.value as AnswerSpec;
+          for (const v of a.visuals ?? []) pin(c.chatId, sourceKey(v), v, a);
+        }
+      }
       patch((t) => (t.status === "running" ? { ...t, status: "done", endedAt: Date.now() } : t), true);
     } catch (e) {
       if ((e as Error).name === "AbortError") patch((t) => ({ ...t, status: "done", endedAt: Date.now() }), true);
