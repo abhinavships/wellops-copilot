@@ -13,8 +13,8 @@ from wellops.contracts import Citation, RunDeps
 from .core import ToolOut, coerce_scope, ds, finish, get_db, lit, mac, month_add, in_list, win_pred, window, well_pred, scope_text
 from .data import rca_sql
 
-COLS = ["asset_id", "protocol", "rule", "trigger_ref", "trigger_at", "due_at", "state", "detail", "evidence_ids",
-        "fine_usd", "threshold_source"]
+COLS = ["obligation_id", "asset_id", "protocol", "label", "rule", "trigger_ref", "trigger_at", "due_at", "due", "state", "actual",
+        "limit", "unit", "detail", "evidence_ids", "fine_usd", "threshold_source"]
 PLANNED_RE = re.compile(r"planned|scheduled", re.I)
 SHUTIN_RE = re.compile(r"shut[- ]?in|workover|rod string|replacement", re.I)
 
@@ -41,8 +41,9 @@ def obligations(deps: RunDeps, scope=None, start: str | None = None, end: str | 
     src = lambda a, k: P[(a, k)]["source"]
     out: list[dict] = []
 
-    def row(a, proto, rule, ref, trig, due, state, detail, ev, thr, fine=None):
-        out.append({"asset_id": a, "protocol": proto, "rule": rule, "trigger_ref": ref,
+    def row(a, proto, rule, ref, trig, due, state, detail, ev, thr, fine=None, actual=None, limit=None, unit=None):
+        out.append({"obligation_id": f"{a}:{proto}:{ref}", "label": f"{proto} {rule}", "actual": actual, "limit": limit,
+                    "unit": unit, "due": _fmt(due) if isinstance(due, datetime) else due, "asset_id": a, "protocol": proto, "rule": rule, "trigger_ref": ref,
                     "trigger_at": _fmt(trig) if isinstance(trig, datetime) else trig,
                     "due_at": _fmt(due) if isinstance(due, datetime) else due, "state": state, "detail": detail,
                     "evidence_ids": ", ".join(dict.fromkeys(x for x in ev if x)), "fine_usd": fine, "threshold_source": thr})
@@ -74,12 +75,12 @@ FROM {mac(deps, 'spills_real')} e WHERE {pred('e.asset_id')} AND {win_pred('e.in
                 row(a, "SR-01", "written notice within limit of discovery", ins, t, due,
                     "met" if hrs <= lim else "breached",
                     f"{vol}; written notice filed {hrs:g} h after detection (limit {lim:g} h), {filed['event_id']}{nov_txt}",
-                    [ins, filed["event_id"], *[g["event_id"] for g in nov], *ov], src(a, k), sum(g["fine_usd"] or 0 for g in nov) or None)
+                    [ins, filed["event_id"], *[g["event_id"] for g in nov], *ov], src(a, k), sum(g["fine_usd"] or 0 for g in nov) or None,
+                    hrs, lim, "h")
             else:
-                row(a, "SR-01", "written notice within limit of discovery", ins, t, due,
-                    "breached" if now > due else "pending",
+                row(a, "SR-01", "written notice within limit of discovery", ins, t, due, "breached" if now > due else "pending",
                     f"{vol}; no written notice recorded; due {_fmt(due)} ({lim:g} h after the inspection)"
-                    + (" - overdue" if now > due else ""), [ins, *ov], src(a, k))
+                    + (" - overdue" if now > due else ""), [ins, *ov], src(a, k), None, None, lim, "h")
         # SR-02 containment (any real spill) from report text
         f = facts.get((ins, "containment_hours"))
         lim2 = pv(a, "containment_hours")
@@ -87,7 +88,7 @@ FROM {mac(deps, 'spills_real')} e WHERE {pred('e.asset_id')} AND {win_pred('e.in
             row(a, "SR-02", "contain within limit of discovery", ins, t, t + timedelta(hours=lim2),
                 "breached" if f["num"] > lim2 else "met",
                 f"{vol}; contained after about {f['num']:g} h (limit {lim2:g} h), only stated in report {f['maintenance_id']}",
-                [ins, f["maintenance_id"]], src(a, "containment_hours"))
+                [ins, f["maintenance_id"]], src(a, "containment_hours"), None, f["num"], lim2, "h")
             cites.append(Citation(kind="report", id=f["maintenance_id"], span=(f["span_start"], f["span_end"]),
                                   label="containment_hours"))
         else:
@@ -101,13 +102,13 @@ FROM {mac(deps, 'spills_real')} e WHERE {pred('e.asset_id')} AND {win_pred('e.in
                 ok = _ts(si["date"]) <= due
                 row(a, "SR-03", "agency verification within limit", ins, t, due, "met" if ok else "breached",
                     f"{vol}; site inspection {si['event_id']} closed on {si['date']}" + ("" if ok else " (after the deadline)"),
-                    [ins, si["event_id"]], src(a, "remediation_verify_days"))
+                    [ins, si["event_id"]], src(a, "remediation_verify_days"), None, None, days, "d")
             else:
                 late = now > due
                 row(a, "SR-03", "agency verification within limit", ins, t, due, "breached" if late else "pending",
                     f"{vol}; verification due {_fmt(due)}" + (f"; site inspection {si['event_id']} still open"
                                                               if si else "; no site inspection recorded"),
-                    [ins, si and si["event_id"]], src(a, "remediation_verify_days"))
+                    [ins, si and si["event_id"]], src(a, "remediation_verify_days"), None, None, days, "d")
     # RC-04: every NOV in the window
     for g in (g for g in regs if g["event_type"] == "notice_of_violation" and
               win_ok(g["date"], s, e)):
@@ -122,12 +123,13 @@ FROM {mac(deps, 'spills_real')} e WHERE {pred('e.asset_id')} AND {win_pred('e.in
             ok = _ts(resp["date"]) <= due
             row(a, "RC-04", "answer NOV within limit", g["event_id"], t.strftime("%Y-%m-%d"), due.strftime("%Y-%m-%d"),
                 "met" if ok else "breached", f"NOV answered on {resp['date']} ({resp['event_id']})" + ("" if ok else ", late"),
-                [g["event_id"], resp["event_id"]], src(a, "nov_response_days"), g["fine_usd"])
+                [g["event_id"], resp["event_id"]], src(a, "nov_response_days"), g["fine_usd"],
+                (_ts(resp["date"]) - t).days, days, "d")
         else:
             row(a, "RC-04", "answer NOV within limit", g["event_id"], t.strftime("%Y-%m-%d"), due.strftime("%Y-%m-%d"),
                 "breached" if now > due else "pending",
                 f"NOV [{g['status']}] fine ${g['fine_usd']:,.0f}; no nov_response_filed recorded; response due {due:%Y-%m-%d}",
-                [g["event_id"]], src(a, "nov_response_days"), g["fine_usd"])
+                [g["event_id"]], src(a, "nov_response_days"), g["fine_usd"], None, days, "d")
     # RC-02: flowline integrity test per calendar year that overlaps the window
     first = s or date(1900, 1, 1)
     wells = db.rows(f"SELECT asset_id, installed_on FROM wells WHERE dataset_id={d} AND {pred('asset_id')}")

@@ -43,7 +43,7 @@ The wellhead must stay **at or below 105 °C**. Above 105 °C, shut in and inspe
 Same as T200 section 10.
 """
 T500_RULE = dict(param="production_delta_min_c", value=25.0, doc_id="OM-T500", section="3", quote="at least 25 °C above ambient")
-ISO_DATE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
 
 
 def _shift_dates(text: str, days: int) -> str:

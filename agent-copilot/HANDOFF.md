@@ -2,7 +2,7 @@
 
 > Written so another Claude session or account can continue without this conversation. Update the
 > "Status" table and the "Next actions" list whenever you commit.
-> Last updated: 2026-10-17 (session 1, lead = Opus; stream agents = Sonnet).
+> Last updated: 2026-10-17 (session 2). Note: Ollama on 192.168.10.222 answered `/api/tags` with **no models**: recreate `qwen3-vl-8b-32k` before live runs.
 
 ## 1. What this is
 FlytBase Hack Day "Asset Intelligence Copilot": a chat copilot over an oil-field dataset with
@@ -43,14 +43,15 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 | L0 substrate | ✅ done | `backend/src/wellops/substrate/` (ingest, views macros, report_facts, rules.yaml, schema.sql) | `cd backend && uv run python -m wellops.substrate.ingest && uv run pytest -q tests/test_substrate.py` (10 pass) |
 | L1 dq flags | ✅ done | `backend/src/wellops/trust/dq.py` | flags: hot_idle 36, recorded_status_stale 21, inspection_gap 14, repair_in_progress 8, nonstandard filename 2, ref-only-in-text 2 |
 | Contracts | ✅ done | `backend/src/wellops/contracts/__init__.py` (TS mirror at `frontend/src/contracts.ts`) | — |
-| L2 tools | 🟡 WIP (stream B) | `backend/src/wellops/tools/` (core, data, docs, entity, obligations) | `uv run pytest -q tests/test_tools.py` |
-| Memory | 🟡 WIP (stream B) | `backend/src/wellops/memory/` (assertions, conflicts, episodes) | — |
-| L3 agent + skills | ⏳ not started | `backend/src/wellops/agent/`, `skills/` | — |
-| L4 verifier | ⏳ | `backend/src/wellops/verify/` | — |
+| L2 tools | ✅ done | `backend/src/wellops/tools/` (core, data, docs, entity, obligations) | `uv run pytest -q tests/test_tools.py` |
+| Memory | ✅ done | `backend/src/wellops/memory/` (assertions, conflicts, episodes) | — |
+| L3 agent + skills | ✅ built (tested with TestModel, not yet run on a real model) | `backend/src/wellops/agent/` (agent, prompt, skills, turn), `skills/*/SKILL.md` (9) | `uv run pytest -q tests/test_agent.py` |
+| L4 verifier | ✅ gates + output_validator | `backend/src/wellops/verify/gates.py` | backend `uv run pytest -q` (33 pass) |
 | API (FastAPI + AG-UI) | ⏳ | `backend/src/wellops/api/` | — |
 | L5 UI | ✅ done against mocks (build+lint pass); not yet wired live. Mock fixtures contain made-up IDs (e.g. INS-0001-0211, CTX-0164-002) and say "unconfirmed until you decide" (contradicts ADR-013): never demo mock mode, replace fixtures with real data | `frontend/` | `npm i && npm run dev:mock`; screenshots: `node scripts/screenshots.mjs <dir>` |
 | L6 evals | 🟡 WIP (stream D): 18 golden cases (YAML + JSON schema), 60+ synthetic, scorers, Opik metrics, fault injection, key audit | `evals/` (own uv project) | key audit: **agrees 199, disagrees 0, not computable 77** (`evals/results/key_audit.md`) |
-| Mutated dataset | ⏳ | `evals/evals/mutate/` | — |
+| Mutated dataset | ✅ generator + checks | `evals/evals/mutate/` | evals `uv run pytest -q` (25 pass) |
+| Eval runner | ✅ `evals/evals/run.py` + Opik sink; never run against a live API | `evals/evals/run.py`, `runner/` | — |
 
 ## 4. How the streams were briefed (re-brief a new agent with the same scope)
 - **B (backend):** tools → memory → Pydantic AI agent (`deps_type=RunDeps`, `output_type=AnswerSpec`, skills toolset

@@ -50,7 +50,7 @@ def run_checks(data_dir: Path, manifest: dict, db_path: Path | None = None) -> d
     if manifest["renamed"]:
         ids = [r["maintenance_id"] for r in manifest["renamed"]]
         got = _q(con, "SELECT count(*) FROM reports WHERE dataset_id=? AND maintenance_id IN (SELECT unnest(?))", DSM, ids)[0][0]
-        rec("renamed_reports_still_ingested", got == len(ids), f"{got}/{len(ids)}")
+        rec("renamed_reports_still_ingested", got >= len(ids) if manifest.get("collide") else got == len(ids), f"{got}/{len(ids)}")
     # ---- horizon shift
     mx = _q(con, "SELECT max(inspected_at)::DATE FROM inspections WHERE dataset_id=?", DSM)[0][0]
     exp = date(2026, 10, 15) + timedelta(days=manifest["shift_days"])

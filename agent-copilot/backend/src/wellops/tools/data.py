@@ -311,7 +311,9 @@ FROM assertions WHERE dataset_id = {d} AND scope_level = 'inspection' AND scope_
         rows.append({"step": 5, "kind": "assertion", "id": a["assertion_id"], "ts": a["tx_time"],
                      "summary": f"{a['kind']} {a['target_attr']}: {a['original_num']} -> {a['value_num']} by "
                                 f"{names.get(a['author_user_id'], a['author_user_id'])} [{a['status']}] {a['reason'] or ''}"})
-    cols = ["step", "kind", "id", "ts", "summary", "span", "report", "overlay"]
+    cols = ["kind", "id", "label", "at", "step", "ts", "summary", "span", "report", "overlay"]
+    for r in rows:
+        r["label"], r["at"] = r["summary"], r["ts"]
     rows = [{c: r.get(c) for c in cols} for r in rows]
     confl = cf.scan_inspections(db, deps, [ins])
     return finish(db, deps, "entity_list", cols, rows, sql=None, notes=[
