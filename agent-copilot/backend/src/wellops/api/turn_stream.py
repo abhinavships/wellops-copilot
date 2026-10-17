@@ -1,13 +1,8 @@
-"""Hermes Agent behind the AG-UI endpoint.
-
-Hermes runs the agent loop (its own process and venv: agent-copilot/hermes); WellOps tools reach it over MCP.
-Around it sits the WellOps harness: the same verifier gates, with up to two corrective re-asks, the generative-UI
-queue filled by `show_visual`, and the wellops.* events the UI already understands.
-"""
+"""One AG-UI turn: SQLite hot cache -> native agent (Gemini, WellOps tool registry) -> verifier gates with up to two
+corrective re-asks -> one focused generative-UI element -> wellops.* events and a measured run trace."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 import uuid
@@ -22,15 +17,15 @@ from wellops.settings import ROOT, settings
 from wellops.tools.core import store
 from wellops.verify.gates import MAX_RETRIES, verify
 
-HERMES_DIR = ROOT / "hermes"
-HERMES_PY = HERMES_DIR / ".venv" / "bin" / "python"
+from .native_agent import run_native
+
 PROVIDERS = {  # provider -> (OpenAI-compatible base_url, default model, settings attr holding the key)
-    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash", "gemini_api_key"),  # HERMES_MODEL=gemini-4-argon for max quality (45-53 s/turn)
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash", "gemini_api_key"),  # LLM_MODEL=gemini-4-argon for max quality (45-53 s/turn)
 }
-BASE_URL, _DEFAULT_MODEL, _KEY_ATTR = PROVIDERS[settings.hermes_provider]
-MODEL = settings.hermes_model or _DEFAULT_MODEL
+BASE_URL, _DEFAULT_MODEL, _KEY_ATTR = PROVIDERS[settings.llm_provider]
+MODEL = settings.llm_model or _DEFAULT_MODEL
 FAST = {"reasoning_effort": "none", "temperature": 0.2}  # no hidden reasoning: answers are short and tool-grounded
-HISTORY: dict[str, list[dict]] = {}  # chat_id -> Hermes (OpenAI-format) message history
+HISTORY: dict[str, list] = {}  # chat_id -> agent message history
 
 SYSTEM = """You are WellOps, an oil-field asset copilot. Today is {today}; the user is {principal}.
 Rules:
@@ -45,7 +40,7 @@ Rules:
   name any note that disagrees. After an applied correction, re-run the affected query (well_status or obligations)
   and state the consequence (e.g. "WELL-0164 is now producing", "now a reportable spill: SR-01 notice overdue").
 - Status statements about a well ("it's running", "shut in since 14 Oct") also go to propose_correction as
-  {"producing": ...}; planned work, shared facts and rules go to remember_correction.
+  {{"producing": ...}}; planned work, shared facts and rules go to remember_correction.
 - If notes and sensor data disagree, say so plainly and name both sources.
 - For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id.
 - Mention the key record id (e.g. INS-0001-0203) once, inline.
@@ -55,22 +50,6 @@ Rules:
 
 def _sse(ev: dict) -> str:
     return f"data: {json.dumps(ev, default=str)}\n\n"
-
-
-async def _run_hermes(req: dict) -> AsyncIterator[dict]:
-    proc = await asyncio.create_subprocess_exec(
-        str(HERMES_PY), str(HERMES_DIR / "runner.py"), cwd=str(HERMES_DIR),
-        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-        limit=16 * 1024 * 1024)
-    proc.stdin.write(json.dumps(req).encode())
-    await proc.stdin.drain()
-    proc.stdin.close()
-    async for line in proc.stdout:
-        try:
-            yield json.loads(line)
-        except ValueError:
-            continue
-    await proc.wait()
 
 
 def _focus(deps: RunDeps, visuals: list[Visual]) -> list[Visual]:
@@ -116,12 +95,11 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
     mcp_server.TOOL_LOG.pop(deps.chat_id, None)
     for attempt in range(MAX_RETRIES + 1):
         req = dict(message=ask, history=final_msgs, system=system, headers=headers,
-                   mcp_url=f"{settings.self_url}/mcp/", model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.hermes_provider,
-                   request_overrides=FAST,
-                   home=str(HERMES_DIR / "home" / re.sub(r"\W", "_", deps.chat_id)))
+                   model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.llm_provider,
+                   request_overrides=FAST)
         mid, text, err = f"m-{uuid.uuid4().hex[:8]}", "", None
         yield ({"type": "TEXT_MESSAGE_START", "messageId": mid, "role": "assistant"})
-        async for ev in _run_hermes(req):
+        async for ev in run_native(deps, req):
             k = ev.get("ev")
             if k == "tool_start":
                 yield ({"type": "TOOL_CALL_START", "toolCallId": ev["id"], "toolCallName": ev["name"].removeprefix("mcp__wellops__"), "parentMessageId": mid})
@@ -140,9 +118,9 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
                 err = ev["message"]
         yield ({"type": "TEXT_MESSAGE_END", "messageId": mid})
         if not err and re.match(r"API call failed|HTTP 4\d\d|Rate limit", text.strip()):
-            err = text.strip()[:300]  # provider failure surfaced by Hermes as text: never present it as an answer
+            err = text.strip()[:300]  # provider failure surfaced as text: never present it as an answer
         if err:
-            yield ({"type": "RUN_ERROR", "message": f"Model provider: {err}" if "429" in err else f"Hermes: {err}"})
+            yield ({"type": "RUN_ERROR", "message": f"Model provider: {err}" if "429" in err else f"Agent: {err}"})
             state["error"] = True
             return
         spec = _compose(deps, text)
@@ -162,9 +140,9 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
     record(deps, message, spec)
     last = attempts[-1]
     yield ({"type": "CUSTOM", "name": "wellops.verification", "value": {
-        "ok": last.ok, "retries": len(attempts) - 1, "harness": "hermes-agent",
+        "ok": last.ok, "retries": len(attempts) - 1, "harness": "wellops-native",
         "gates": [{"name": g.name, "ok": g.ok, "detail": "; ".join(g.details) or None} for g in last.gates]}})
-    yield ({"type": "CUSTOM", "name": "wellops.usage", "value": {"model": f"hermes-agent → {MODEL}"}})
+    yield ({"type": "CUSTOM", "name": "wellops.usage", "value": {"model": MODEL}})
     yield ({"type": "CUSTOM", "name": "wellops.answer", "value": spec.model_dump(mode="json")})
     state.update(ok=last.ok, spec=spec, retries=len(attempts) - 1)
 

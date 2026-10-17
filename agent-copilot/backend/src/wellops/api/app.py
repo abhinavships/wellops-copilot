@@ -100,9 +100,9 @@ async def agui(request: Request) -> Response:
     except ValidationError as e:
         raise HTTPException(422, str(e)) from e
     deps = deps_from(request, request.headers.get("x-chat-id") or run_input.thread_id)
-    if settings.harness == "hermes" and not AGENT_OVERRIDE:
+    if settings.harness == "native" and not AGENT_OVERRIDE:
         from fastapi.responses import StreamingResponse
-        from .hermes_bridge import stream_turn
+        from .turn_stream import stream_turn
         users = [m for m in run_input.messages if getattr(m, "role", None) == "user"]
         text = str(users[-1].content) if users else ""
         return StreamingResponse(stream_turn(deps, text, run_input.thread_id, run_input.run_id),
@@ -196,7 +196,7 @@ async def resolve(dispute_id: str, request: Request) -> dict:
 @app.get("/api/health")
 def health() -> dict:
     n = get_db().rows("SELECT count(*) n FROM wells WHERE dataset_id=?", [settings.active_dataset])[0]["n"]
-    return {"ok": True, "dataset": settings.active_dataset, "wells": n, "harness": settings.harness, "model": __import__("wellops.api.hermes_bridge", fromlist=["MODEL"]).MODEL,
+    return {"ok": True, "dataset": settings.active_dataset, "wells": n, "harness": settings.harness, "model": __import__("wellops.api.turn_stream", fromlist=["MODEL"]).MODEL,
             "instance": INSTANCE}
 
 

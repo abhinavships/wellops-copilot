@@ -225,7 +225,7 @@ export function Shell() {
                   <div className="label flex items-center justify-between border-b border-line pb-2"><span><span className="text-warn">Wellops</span> · asset intelligence</span><span>Fig. 0 — every figure traces to a record</span></div>
                   <div className="mx-auto mt-10 inline-flex items-center gap-2 rounded-full border border-line bg-panel px-1.5 py-1 text-[13px]">
                     <span className="rounded-full bg-fg px-2 py-0.5 font-mono text-[10px] tracking-widest text-bg">NEW</span>
-                    <span>Hermes agent · proof before any correction</span>
+                    <span>Proof before any correction · drag figures to compare</span>
                   </div>
                   <h2 className="display mt-6 text-center text-5xl font-bold leading-[1.02] sm:text-6xl">Ask your <span className="hl">wells</span><br />anything.</h2>
                   <p className="mx-auto mt-4 max-w-md text-center text-[15px] text-muted">Status, downtime, spills, duties. Answers come back as a figure you can touch, with the records behind every number.</p>

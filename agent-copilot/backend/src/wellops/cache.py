@@ -1,7 +1,7 @@
 """SQLite hot cache in front of the agent (DuckDB stays the analytics engine).
 
 - turns: a verified answer to the same question (same clock, dataset and data version) replays instantly.
-- tools: MCP tool results by canonical args, so Hermes retries and repeated lookups cost nothing.
+- tools: MCP tool results by canonical args, so agent retries and repeated lookups cost nothing.
 data_version() changes whenever an assertion or an upload lands, which invalidates both.
 """
 

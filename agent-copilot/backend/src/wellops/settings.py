@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     clock_today: date = date(2026, 10, 17)
     db_path: Path = ROOT / "backend" / "wellops.duckdb"
 
-    model_orchestrator: str = ""  # legacy pydantic-ai path only; the live harness is Hermes + Gemini
+    model_orchestrator: str = ""  # legacy pydantic-ai test path only
     model_worker: str = ""
     model_local: str = ""
     model_fallbacks: str = ""  # comma-separated, tried in order (FallbackModel)
@@ -24,10 +24,10 @@ class Settings(BaseSettings):
     opik_api_key: str = ""
     elevenlabs_api_key: str = ""
     gemini_api_key: str = ""
-    hermes_provider: str = "gemini"  # gemini (Google OpenAI-compatible endpoint)
-    hermes_model: str = ""  # default per provider below
+    llm_provider: str = "gemini"  # Google OpenAI-compatible endpoint
+    llm_model: str = ""  # default per provider below
     self_url: str = "http://127.0.0.1:8000"  # where this API (and its /mcp) is reachable from local agents
-    harness: str = "hermes"  # hermes (Hermes Agent over MCP) | pydantic (in-process pydantic-ai agent)
+    harness: str = "native"  # native (Gemini agent over the WellOps tool registry) | pydantic (legacy test agent)
     opik_workspace: str = ""
     opik_project_name: str = "wellops"
     opik_url_override: str = ""

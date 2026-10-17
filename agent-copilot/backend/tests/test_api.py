@@ -61,3 +61,8 @@ def test_rest_endpoints(client):
     assert rec["record"]["asset_id"] == "WELL-0175"
     assert client.get("/api/records/inspection/INS-9999-9999").status_code == 404
     assert client.post("/api/assertions/A-deadbeef/undo", headers=H).status_code == 404
+
+
+def test_live_system_prompt_formats():
+    from wellops.api.turn_stream import SYSTEM
+    assert "U-201" in SYSTEM.format(today="2026-10-17", principal="U-201")

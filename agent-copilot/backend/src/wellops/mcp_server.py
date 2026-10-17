@@ -1,12 +1,14 @@
 """WellOps tools as an MCP server (streamable HTTP, mounted in the API process so it shares the DuckDB handle).
 
-Hermes Agent connects to it as `mcp-wellops`. Session context (user, chat, clock) arrives as request headers that
-the API writes into the per-turn Hermes config, never as model arguments.
+The in-process agent calls these same functions directly (session context in a contextvar); external MCP clients
+(Claude Desktop, Cursor, other agents) connect over HTTP with X-User-Id / X-Chat-Id / X-Clock-Today headers.
+Session context is never a model argument.
 """
 
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import json
 from datetime import date
 from typing import Any, Literal
@@ -28,7 +30,12 @@ TOOL_LOG: dict[str, list[Any]] = {}  # chat_id -> ToolOut results this turn (for
 PREVIEW_ROWS = 25
 
 
-def _deps(ctx: Context) -> RunDeps:
+CURRENT: contextvars.ContextVar[RunDeps | None] = contextvars.ContextVar("wellops_deps", default=None)  # in-process agent
+
+
+def _deps(ctx: Context | None) -> RunDeps:
+    if (d := CURRENT.get()) is not None:  # called in-process by the native agent: session context set by the API
+        return d
     h = ctx.request_context.request.headers if ctx.request_context.request else {}
     return RunDeps(principal=h.get("x-user-id") or "U-201", chat_id=h.get("x-chat-id") or "default",
                    today=date.fromisoformat(h.get("x-clock-today") or str(settings.clock_today)),

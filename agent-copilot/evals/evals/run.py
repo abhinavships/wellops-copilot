@@ -65,7 +65,7 @@ def report_md(run_id: str, args, summ: dict, audit: dict | None, meta: dict | No
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="evals.run")
-    ap.add_argument("--target", choices=["fake", "api", "hermes"], default="fake")
+    ap.add_argument("--target", choices=["fake", "api"], default="fake")
     ap.add_argument("--suite", choices=["golden", "synthetic", "all"], default="golden")
     ap.add_argument("--k", type=int, default=1)
     ap.add_argument("--opik", action="store_true", help="push dataset + run as Opik experiment (needs OPIK_API_KEY/OPIK_WORKSPACE)")

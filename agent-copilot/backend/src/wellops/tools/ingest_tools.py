@@ -1,4 +1,4 @@
-"""Ingestion tools as plain functions returning dicts (registered as MCP tools for the Hermes harness)."""
+"""Ingestion tools as plain functions returning dicts (registered as WellOps MCP tools)."""
 
 from __future__ import annotations
 
