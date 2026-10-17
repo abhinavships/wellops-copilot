@@ -37,6 +37,9 @@ Rules:
   If the user asks for a specific chart, use exactly that type.
 - If the user corrects data or states a rule, call remember_correction, then re-run the affected query.
 - If notes and sensor data disagree, say so plainly and name both sources.
+- For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id.
+- Mention the key record id (e.g. INS-0001-0203) once, inline.
+- To create an image, call generate_image (it is displayed automatically).
 """
 
 

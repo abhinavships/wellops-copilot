@@ -146,6 +146,17 @@ def recall_conversations(ctx: Context, query: str) -> str:
     return _out(ctx, memory.recall_episodes, query, None)
 
 
+@mcp.tool()
+def generate_image(ctx: Context, prompt: str, width: int = 768, height: int = 512) -> str:
+    """Create an image from a text prompt (illustrations, site diagrams, report covers). Then call
+    show_visual(type="image", title=<prompt>, handle=<media_id>) to display it."""
+    from wellops.tools.media_gen import generate_image as gen
+    r = gen(_deps(ctx), prompt, width, height)
+    deps = _deps(ctx)
+    UI_QUEUE.setdefault(deps.chat_id, []).append(Visual(type="image", title=prompt[:80], encodings={"src": r["url"]}))
+    return json.dumps(r)
+
+
 VisualT = Literal["status_card", "table", "line", "bar", "map", "heatmap", "obligation_timeline", "evidence_chain",
                   "conflict_card", "correction_diff", "kpi", "gauge", "timeline", "image", "ingest_report", "none"]
 
