@@ -47,7 +47,7 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 | Memory | ✅ done | `backend/src/wellops/memory/` (assertions, conflicts, episodes) | — |
 | L3 agent + skills | ✅ built (tested with TestModel, not yet run on a real model) | `backend/src/wellops/agent/` (agent, prompt, skills, turn), `skills/*/SKILL.md` (9) | `uv run pytest -q tests/test_agent.py` |
 | L4 verifier | ✅ gates + output_validator | `backend/src/wellops/verify/gates.py` | backend `uv run pytest -q` (33 pass) |
-| API (FastAPI + AG-UI) | ⏳ | `backend/src/wellops/api/` | — |
+| API (FastAPI + AG-UI) | ✅ live-verified ("15 wells not producing" via Nemotron free, verifier retry worked) | `backend/src/wellops/api/app.py`; run `cd backend && uv run uvicorn wellops.api.app:app --port 8000` | `uv run pytest -q tests/test_api.py` |
 | L5 UI | ✅ done against mocks (build+lint pass); not yet wired live. Mock fixtures contain made-up IDs (e.g. INS-0001-0211, CTX-0164-002) and say "unconfirmed until you decide" (contradicts ADR-013): never demo mock mode, replace fixtures with real data | `frontend/` | `npm i && npm run dev:mock`; screenshots: `node scripts/screenshots.mjs <dir>` |
 | L6 evals | 🟡 WIP (stream D): 18 golden cases (YAML + JSON schema), 60+ synthetic, scorers, Opik metrics, fault injection, key audit | `evals/` (own uv project) | key audit: **agrees 199, disagrees 0, not computable 77** (`evals/results/key_audit.md`) |
 | Mutated dataset | ✅ generator + checks | `evals/evals/mutate/` | evals `uv run pytest -q` (25 pass) |
@@ -70,6 +70,13 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
   pass^k. Targets: `fake` (from computed truth) and `api` (AG-UI). Fault-injection meta-eval. Synthetic generator.
   Mutated dataset (renamed reports, new wells, new type T500, shifted horizon, ID collisions). `--opik` pushes
   datasets and experiments with thread_id per chat.
+
+## 4b. Session 2 team (lead = agent-copilot-hackathon-98)
+- 7e: restore Ollama models + tool-call test + `backend/scripts/smoke_turn.py` (owns `.env`, `backend/scripts/`).
+- 7b: real fixtures + UI wired to live API + screenshots (owns `frontend/`, `backend/scripts/make_fixtures.py`).
+- 53: eval runner fake/api + failure taxonomy + WRITEUP/VIDEO_SCRIPT drafts (owns `evals/`, `docs/WRITEUP.md`, `docs/VIDEO_SCRIPT.md`).
+- Gotchas: the API server holds the DuckDB lock, so in-process scripts must use `DB_PATH=/tmp/<name>.duckdb` and ingest first.
+  Small models send nested tool args as JSON strings; `Scope`/`AssertionIn` accept them (b9627e0).
 
 ## 5. Next actions (in order)
 1. Finish stream B: agent + verifier + API. Keep `uv run pytest -q` green in `backend/`.
