@@ -18,7 +18,7 @@ def run_case(case: dict, target, run_idx: int = 0) -> dict:
         except Exception as e:  # a target crash is a failed turn, not a crashed eval
             answer, trace, err = {"markdown": ""}, [], f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=2)}"
         rec = dict(turn_id=t.get("id", f"t{i + 1}"), user=t["user"], chat=t["chat"], clock=t["clock"], say=t["say"],
-                   setup=bool(t.get("setup")), expect=t.get("expect") or {}, answer=answer, trace=trace,
+                   setup=bool(t.get("setup")), expect=t.get("expect") or {}, truth=t.get("truth"), answer=answer, trace=trace,
                    latency_s=round(time.time() - t0, 3), error=err)
         if not rec["setup"]:
             sc = score_turn(answer, rec["expect"], trace)

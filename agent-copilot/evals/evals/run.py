@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import sys
 import time
@@ -74,6 +75,7 @@ def main(argv=None) -> int:
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--no-meta", action="store_true")
     ap.add_argument("--project", default=None)
+    ap.add_argument("--no-qa-store", action="store_true", help="do not index the run in the QA store (evals/results/qa.sqlite)")
     a = ap.parse_args(argv)
 
     cases = load_cases(a.suite)
@@ -87,6 +89,9 @@ def main(argv=None) -> int:
     out = RESULTS_DIR / run_id
     out.mkdir(parents=True, exist_ok=True)
     runner = lambda case, i: run_case(case, target, i)  # noqa: E731
+    from evals.qa.store import current_git_sha
+    run_meta = dict(started_at=datetime.now().isoformat(timespec="seconds"), git_sha=current_git_sha(),
+                model=getattr(target, "model", None))
 
     opik_url = None
     results: list[dict] = []
@@ -132,7 +137,16 @@ def main(argv=None) -> int:
         from evals.runner.faults import meta_eval
         meta = meta_eval(cases, target)
         (out / "meta_eval.json").write_text(json.dumps(meta, indent=1))
-    (out / "results.json").write_text(json.dumps(dict(run_id=run_id, args=vars(a), summary=summ, results=results), indent=1, default=str))
+    run_meta["finished_at"] = datetime.now().isoformat(timespec="seconds")
+    (out / "results.json").write_text(json.dumps(dict(run_id=run_id, args=vars(a), meta=run_meta, summary=summ, results=results),
+                                                 indent=1, default=str))
+    if not a.no_qa_store:
+        try:  # index the run for the QA explorer and the regression gate; never fail an eval over it
+            from evals.qa import store
+            con = store.connect(os.environ.get("QA_DB") or RESULTS_DIR / "qa.sqlite")
+            store.ingest(con, store.load_run_dir(out) or {}, force=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"[qa] store ingest skipped: {e}", file=sys.stderr)
     md = report_md(run_id, a, summ, audit, meta, opik_url)
     (out / "report.md").write_text(md)
     print(md)
