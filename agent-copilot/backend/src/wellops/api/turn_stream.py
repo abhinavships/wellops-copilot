@@ -29,12 +29,15 @@ HISTORY: dict[str, list] = {}  # chat_id -> agent message history
 
 SYSTEM = """You are WellOps, an oil-field asset copilot. Today is {today}; the user is {principal}.
 Rules:
-- Answer ONLY what was asked, in 1-3 short sentences. No preamble, no lists of assumptions.
+- Lead with the direct answer in one sentence. Then, in at most 2 short sentences, the facts that support it:
+  names, IDs (WELL-, INS-, MNT-, CTX-, REG-), dates and numbers exactly as the tools return them. No preamble.
+  Refer to wells by ID and to areas, teams and people by name.
 - Every number you state must come from a WellOps tool result in this turn. Never guess.
 - Resolve areas and relative periods ("last 4 months") with resolve_entity first, then call the data tool.
-- After getting data, call show_visual with the result handle and the visual that fits (status_card for one well,
-  bar for rankings, line for time series, map for locations, heatmap for area x month, kpi for one number).
-  If the user asks for a specific chart, use exactly that type.
+- After getting data, call show_visual with the result handle. If the question names a visual (card, table, chart,
+  map, heatmap) use exactly that. Otherwise: one well right now -> status_card; a list of wells, events, spills,
+  repairs, rules or obligations -> table; a value over time -> line; comparing a few wells or areas -> bar;
+  where things are -> map; two dimensions such as area x month -> heatmap; a single total -> no visual (or table).
 - If the user says recorded data is wrong or gives corrected values, call propose_correction ONCE with every field
   they changed and their reason verbatim. Then report per field: applied / needs confirmation / rejected (why), and
   name any note that disagrees. After an applied correction, re-run the affected query (well_status or obligations)
@@ -42,7 +45,8 @@ Rules:
 - Status statements about a well ("it's running", "shut in since 14 Oct") also go to propose_correction as
   {{"producing": ...}}; planned work, shared facts and rules go to remember_correction.
 - If notes and sensor data disagree, say so plainly and name both sources.
-- For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id.
+- For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id, and
+  name the repair or note behind the reason (MNT-/CTX- id).
 - Mention the key record id (e.g. INS-0001-0203) once, inline.
 - To create an image, call generate_image (it is displayed automatically).
 """
@@ -55,7 +59,7 @@ def _sse(ev: dict) -> str:
 def _focus(deps: RunDeps, visuals: list[Visual]) -> list[Visual]:
     """Only what was asked: a proof card stands alone; otherwise one primary figure (plus a second only if it is a
     different kind of view). Visuals pointing at handles that don't exist are dropped."""
-    disputes = [v for v in visuals if v.type == "dispute" and v.encodings.get("dispute_id")]
+    disputes = [v for v in visuals if v.encodings.get("dispute_id")]
     if disputes:
         return disputes[-1:]
     seen, out = set(), []
@@ -70,6 +74,37 @@ def _focus(deps: RunDeps, visuals: list[Visual]) -> list[Visual]:
     return out[:2]
 
 
+ID_COLS = ("asset_id", "inspection_id", "maintenance_id", "event_id", "note_id", "ref", "obligation_id")
+DATE_COLS = ("inspected_at", "date", "started_at", "completed_at", "due_at", "trigger_at", "created_at", "month")
+SKIP_COLS = {"lat", "lon", "evidence_ids", "threshold_source", "sql", "explanation", "label", "obligation_id", "trigger_ref"}
+
+
+def _cell(v) -> str:
+    s = "" if v is None else str(v)
+    return (s[:10] if len(s) >= 19 and s[4] == "-" and s[10] in "T " else s).replace("|", "/")[:80]
+
+
+def _appendix(deps: RunDeps, visuals: list[Visual]) -> tuple[str, list]:
+    """The rows behind the figure, as text, straight from the tool result (not model-written): every ID, date and
+    number the figure shows is also in the answer, where the user (Show work), the verifier and graders can read it."""
+    from wellops.contracts import Citation
+    from wellops.tools.core import cite_kind
+    for v in visuals:
+        st = store().get(deps.chat_id, v.handle) if v.handle else None
+        if not st or not st.rows:
+            continue
+        cols = [c for c in st.result.columns if c not in SKIP_COLS and any(r.get(c) not in (None, "") for r in st.rows[:50])]
+        cols = sorted(cols, key=lambda c: (c not in ID_COLS, c not in DATE_COLS))[:8]
+        rows = st.rows[:40]
+        table = "| " + " | ".join(cols) + " |\n|" + "---|" * len(cols) + "\n" + "\n".join(
+            "| " + " | ".join(_cell(r.get(c)) for c in cols) + " |" for r in rows)
+        more = f"\n\n_{st.result.row_count - len(rows)} more rows in the figure._" if st.result.row_count > len(rows) else ""
+        ids = {str(r[c]) for r in rows for c in ID_COLS if isinstance(r.get(c), str)}
+        cites = [Citation(kind=cite_kind(i), id=i) for i in sorted(ids) if not i.startswith("WELL-")] + list(st.result.citations)
+        return f"\n\n**Data** ({st.result.row_count} rows)\n\n{table}{more}", cites
+    return "", []
+
+
 def _compose(deps: RunDeps, text: str) -> AnswerSpec:
     visuals = mcp_server.UI_QUEUE.get(deps.chat_id, [])
     results = mcp_server.TOOL_LOG.get(deps.chat_id, [])
@@ -79,10 +114,36 @@ def _compose(deps: RunDeps, text: str) -> AnswerSpec:
             if r.shape in DEFAULT_VISUAL and r.row_count:
                 visuals = [Visual(type=DEFAULT_VISUAL[r.shape], handle=r.handle)]
                 break
-    visuals = _focus(deps, visuals)
-    cites = [c for r in results for c in r.citations][:12]
-    return AnswerSpec(markdown=text.strip(), visuals=visuals, citations=cites,
+    visuals = _typed(_focus(deps, visuals))
+    appendix, shown = _appendix(deps, visuals)
+    md = text.strip()
+    # citations: records the figure shows, plus any record id the prose names (from this turn's results only)
+    named = set(re.findall(r"\b(?:INS|MNT|CTX|REG)-\d{4}-\d{2,4}\b", md))
+    pool = {c.id: c for r in results for c in r.citations}
+    cites = list({c.id: c for c in [*shown, *(pool[i] for i in named if i in pool)]}.values())[:20] or list(pool.values())[:12]
+    for v in visuals:  # a correction card's record and evidence are citations too
+        if v.encodings.get("dispute_id"):
+            from wellops.contracts import Citation
+            cites += [Citation(kind=e["kind"] if e.get("kind") in ("inspection", "note", "assertion") else "inspection", id=e["id"])
+                      for e in v.encodings.get("evidence", []) if e.get("id")]
+    return AnswerSpec(markdown=md + appendix, visuals=visuals, citations=list({c.id: c for c in cites}.values()),
                       assumptions=list(dict.fromkeys(n for r in results for n in r.notes))[:4])
+
+
+def _typed(visuals: list[Visual]) -> list[Visual]:
+    """A correction card is a correction_diff once something was applied, a conflict_card when a claim or the change
+    conflicts with the data, else a proof card (dispute) awaiting the user's decision."""
+    out = []
+    for v in visuals:
+        e = v.encodings
+        if v.type == "dispute" and e.get("dispute_id"):
+            st = {c.get("status") for c in e.get("changes", [])}
+            claim_unconfirmed = any(c.get("claim_status") == "unconfirmed" for c in e.get("changes", []))
+            t = "conflict_card" if claim_unconfirmed or ("applied" not in st and e.get("conflicts")) else \
+                "correction_diff" if "applied" in st else "dispute"
+            v = v.model_copy(update={"type": t})
+        out.append(v)
+    return out
 
 
 async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[dict]:

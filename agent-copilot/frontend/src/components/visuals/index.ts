@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import type { AnswerSpec, HandleData, Visual, VisualType } from "@/contracts";
 import { StatusCard } from "./StatusCard";
 import { DataTable } from "./DataTable";
@@ -23,3 +24,12 @@ export const VISUALS: Partial<Record<VisualType, React.ComponentType<VisualProps
   kpi: Kpi, gauge: Gauge, progress: Progress, timeline: Timeline, list: ListBoard, compare: Compare, image: ImageView,
   ingest_report: IngestCard, callout: Callout, tabs: Tabs, dispute: DisputeCard,
 };
+
+// A correction (correction_diff) or a claim that conflicts with the data (conflict_card) produced by the feedback
+// flow carries a dispute_id: render it with the proof card (fields, evidence, conflicts, undo).
+for (const t of ["correction_diff", "conflict_card"] as const) {
+  const Base = VISUALS[t]!;
+  VISUALS[t] = function ProofAware(p: VisualProps) {
+    return createElement((p.visual.encodings as { dispute_id?: string })?.dispute_id ? DisputeCard : Base, p);
+  } as React.ComponentType<VisualProps>;
+}

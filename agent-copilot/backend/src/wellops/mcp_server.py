@@ -223,9 +223,10 @@ VisualT = Literal["status_card", "table", "line", "bar", "map", "heatmap", "obli
 @mcp.tool()
 def show_visual(ctx: Context, type: VisualT, handle: str | None = None, title: str | None = None,
                 x: str | None = None, y: str | None = None, series: list[str] | None = None) -> str:
-    """Render generative UI for the user from a tool result handle (e.g. "r2"). Pick the type that fits the data:
-    one well -> status_card; ranking/compare -> bar; over time -> line; lat/lon -> map; area x month -> heatmap;
-    duties -> obligation_timeline; a single number -> kpi. Call once per visual, after the data tool."""
+    """Render generative UI from a tool result handle (e.g. "r2"). If the user named a visual, use it. Otherwise:
+    one well right now -> status_card; a list of wells/events/spills/repairs/rules/obligations -> table; a value over
+    time -> line; comparing a few wells or areas -> bar; where things are -> map; area x month -> heatmap.
+    A single total needs no visual. Call once, after the data tool."""
     deps = _deps(ctx)
     st = tools.store().get(deps.chat_id, handle) if handle else None
     if st and st.rows and type == "line" and not y and {"wellhead_c", "ambient_c"} <= set(st.result.columns):
