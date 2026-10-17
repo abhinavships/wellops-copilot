@@ -15,16 +15,16 @@ class Settings(BaseSettings):
     clock_today: date = date(2026, 10, 17)
     db_path: Path = ROOT / "backend" / "wellops.duckdb"
 
-    model_orchestrator: str = "openrouter:nvidia/nemotron-3-super-120b-a12b:free"
-    model_worker: str = "openrouter:poolside/laguna-s-2.1:free"
+    model_orchestrator: str = ""  # legacy pydantic-ai path only; the live harness is Hermes + Gemini
+    model_worker: str = ""
     model_local: str = ""
     model_fallbacks: str = ""  # comma-separated, tried in order (FallbackModel)
     ollama_base_url: str = ""
     openrouter_api_key: str = ""
     opik_api_key: str = ""
     elevenlabs_api_key: str = ""
-    nvidia_api_key: str = ""
-    hermes_provider: str = "nvidia"  # nvidia (integrate.api.nvidia.com) | openrouter
+    gemini_api_key: str = ""
+    hermes_provider: str = "gemini"  # gemini (Google OpenAI-compatible endpoint)
     hermes_model: str = ""  # default per provider below
     harness: str = "hermes"  # hermes (Hermes Agent over MCP) | pydantic (in-process pydantic-ai agent)
     opik_workspace: str = ""

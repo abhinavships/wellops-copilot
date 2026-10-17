@@ -24,13 +24,12 @@ from wellops.verify.gates import MAX_RETRIES, verify
 
 HERMES_DIR = ROOT / "hermes"
 HERMES_PY = HERMES_DIR / ".venv" / "bin" / "python"
-PROVIDERS = {  # provider -> (base_url, default Nemotron model id, settings attr holding the key)
-    "nvidia": ("https://integrate.api.nvidia.com/v1", "nvidia/nemotron-3-super-120b-a12b", "nvidia_api_key"),
-    "openrouter": ("https://openrouter.ai/api/v1", "nvidia/nemotron-3-super-120b-a12b:free", "openrouter_api_key"),
+PROVIDERS = {  # provider -> (OpenAI-compatible base_url, default model, settings attr holding the key)
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash", "gemini_api_key"),  # HERMES_MODEL=gemini-4-argon for max quality (45-53 s/turn)
 }
 BASE_URL, _DEFAULT_MODEL, _KEY_ATTR = PROVIDERS[settings.hermes_provider]
 MODEL = settings.hermes_model or _DEFAULT_MODEL
-FAST = {"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}, "temperature": 0.2}  # Nemotron: no hidden reasoning
+FAST = {"reasoning_effort": "none", "temperature": 0.2}  # no hidden reasoning: answers are short and tool-grounded
 HISTORY: dict[str, list[dict]] = {}  # chat_id -> Hermes (OpenAI-format) message history
 
 SYSTEM = """You are WellOps, an oil-field asset copilot. Today is {today}; the user is {principal}.
@@ -95,7 +94,7 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
     for attempt in range(MAX_RETRIES + 1):
         req = dict(message=ask, history=final_msgs, system=system, headers=headers,
                    mcp_url="http://127.0.0.1:8000/mcp/", model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.hermes_provider,
-                   request_overrides=FAST if settings.hermes_provider == "nvidia" else None,
+                   request_overrides=FAST,
                    home=str(HERMES_DIR / "home" / re.sub(r"\W", "_", deps.chat_id)))
         mid, text, err = f"m-{uuid.uuid4().hex[:8]}", "", None
         yield ({"type": "TEXT_MESSAGE_START", "messageId": mid, "role": "assistant"})
@@ -164,7 +163,7 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
     from wellops import cache
     yield _sse({"type": "RUN_STARTED", "threadId": thread_id, "runId": run_id})
     t0 = time.perf_counter()
-    key = cache.turn_key(message, deps.principal, deps.today)
+    key = cache.turn_key(message, deps.principal, deps.today, MODEL)
     hit = cache.get_turn(key)
     if hit:
         events = _rehandle(deps, hit)

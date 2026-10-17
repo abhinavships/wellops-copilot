@@ -196,7 +196,7 @@ async def resolve(dispute_id: str, request: Request) -> dict:
 @app.get("/api/health")
 def health() -> dict:
     n = get_db().rows("SELECT count(*) n FROM wells WHERE dataset_id=?", [settings.active_dataset])[0]["n"]
-    return {"ok": True, "dataset": settings.active_dataset, "wells": n, "harness": settings.harness, "models": settings.fallback_models,
+    return {"ok": True, "dataset": settings.active_dataset, "wells": n, "harness": settings.harness, "model": __import__("wellops.api.hermes_bridge", fromlist=["MODEL"]).MODEL,
             "instance": INSTANCE}
 
 

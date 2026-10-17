@@ -52,9 +52,9 @@ def norm(q: str) -> str:
     return re.sub(r"[^\w\s-]", "", re.sub(r"\s+", " ", q.strip().lower()))
 
 
-def turn_key(question: str, principal: str, today: Any) -> str:
+def turn_key(question: str, principal: str, today: Any, model: str = "") -> str:
     who = principal if MEMORY_WORDS.search(question) else "*"
-    raw = f"{norm(question)}|{today}|{settings.active_dataset}|{data_version()}|{who}"
+    raw = f"{norm(question)}|{today}|{settings.active_dataset}|{data_version()}|{who}|{model}"
     return hashlib.sha1(raw.encode()).hexdigest()
 
 
