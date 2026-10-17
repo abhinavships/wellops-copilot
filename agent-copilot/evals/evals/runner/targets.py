@@ -223,4 +223,7 @@ def make_target(name: str, **kw) -> Target:
         return FakeTarget()
     if name == "api":
         return ApiTarget(**kw)
+    if name == "hermes":
+        from evals.runner.hermes_target import HermesTarget
+        return HermesTarget(**kw)
     raise ValueError(name)

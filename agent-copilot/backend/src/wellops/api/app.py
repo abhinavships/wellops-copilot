@@ -29,6 +29,7 @@ from wellops.verify import VERIFICATIONS
 app = FastAPI(title="wellops")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 from .voice import router; app.include_router(router)  # noqa: E402, E702
+from .media_gen_api import router as media_gen_router; app.include_router(media_gen_router)  # noqa: E402, E702
 
 HISTORY: dict[str, list[ModelMessage]] = {}  # chat_id -> full pydantic-ai message history (server owns the transcript)
 AGENT_OVERRIDE: dict[str, Any] = {}  # tests set {"agent": Agent} to run without a network model
