@@ -108,8 +108,10 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
             elif k == "error":
                 err = ev["message"]
         yield _sse({"type": "TEXT_MESSAGE_END", "messageId": mid})
+        if not err and re.match(r"API call failed|HTTP 4\d\d|Rate limit", text.strip()):
+            err = text.strip()[:300]  # provider failure surfaced by Hermes as text: never present it as an answer
         if err:
-            yield _sse({"type": "RUN_ERROR", "message": f"Hermes: {err}"})
+            yield _sse({"type": "RUN_ERROR", "message": f"Model provider: {err}" if "429" in err else f"Hermes: {err}"})
             return
         spec = _compose(deps, text)
         results = mcp_server.TOOL_LOG.get(deps.chat_id, [])
