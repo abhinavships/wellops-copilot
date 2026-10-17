@@ -84,7 +84,10 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 2. UI live: `cd frontend && npm run dev` → http://localhost:3000 (Q1 live: 30 s, 6/6 gates, 0 retries).
 3. Backup if the free quota runs out (about 50 req/day): `npm run dev:mock`. That's a replay of REAL tool outputs (make_fixtures.py, all verifier gates pass). Say so.
 4. Evals: fake target 18/18 (harness check), key audit 199/0/77, meta-eval recall 1.00; live gemma run 0/2 (verifier retries exhausted); see docs/WRITEUP.md.
-5. Known: Q7 map initial view clips WELL-0151 (pan); no wellops.verification event on RUN_ERROR.
+5. Board: header toggle Chat → Chat+Board → Board (e19f9bf): dot-grid canvas, drag/resize cards, recharts tooltips, type switch, sort, brush, click → evidence.
+6. Voice (558b00b): mic = browser Web Speech (free); Listen/Voice mode = POST /api/tts → ElevenLabs flash v2.5, voice Sarah, ≤400 chars, disk cache, stops on 401/402/403. Key only in .env.
+7. Framing: docs/HARNESS.md (harness-engineering primer mapping).
+8. Known: Q7 map initial view clips WELL-0151 (pan); no wellops.verification event on RUN_ERROR; qwen3-vl-8b on RTX >6 min per question, gemma4-e2b fails gates.
 
 ## 5. Next actions (in order)
 1. Finish stream B: agent + verifier + API. Keep `uv run pytest -q` green in `backend/`.
