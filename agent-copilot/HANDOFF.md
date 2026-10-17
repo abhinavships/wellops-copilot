@@ -50,7 +50,7 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 | API (FastAPI + AG-UI) | ✅ live-verified ("15 wells not producing" via Nemotron free, verifier retry worked) | `backend/src/wellops/api/app.py`; run `cd backend && uv run uvicorn wellops.api.app:app --port 8000` | `uv run pytest -q tests/test_api.py` |
 | L5 UI | ✅ done against mocks (build+lint pass); not yet wired live. Mock fixtures contain made-up IDs (e.g. INS-0001-0211, CTX-0164-002) and say "unconfirmed until you decide" (contradicts ADR-013): never demo mock mode, replace fixtures with real data | `frontend/` | `npm i && npm run dev:mock`; screenshots: `node scripts/screenshots.mjs <dir>` |
 | L6 evals | 🟡 WIP (stream D): 18 golden cases (YAML + JSON schema), 60+ synthetic, scorers, Opik metrics, fault injection, key audit | `evals/` (own uv project) | key audit: **agrees 199, disagrees 0, not computable 77** (`evals/results/key_audit.md`) |
-| Mutated dataset | ✅ generator + checks | `evals/evals/mutate/` | evals `uv run pytest -q` (25 pass) |
+| Mutated dataset | ✅ generator + checks; findings fixed in 5a98a76 (new well-type rules extracted from its manual, T200 fallback + dq flag; duplicate inspection ids flagged) | `evals/evals/mutate/` | evals `uv run pytest -q` (25 pass) |
 | Eval runner | ✅ `evals/evals/run.py` + Opik sink; never run against a live API | `evals/evals/run.py`, `runner/` | — |
 
 ## 4. How the streams were briefed (re-brief a new agent with the same scope)
