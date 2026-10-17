@@ -75,3 +75,37 @@ const EMPTY: BoardCard[] = [];
 export function useBoard(): BoardCard[] {
   return useSyncExternalStore(subscribe, () => { load(); return cards; }, () => EMPTY);
 }
+
+// --- per-visual chart-type overrides (inline answers and the canvas share them) ------------------------------
+const views = new Map<string, string>();
+const viewSubs = new Set<() => void>();
+let viewTick = 0;
+export const viewKey = (chatId: string, v: Visual) => `${chatId}:${sourceKey(v)}`;
+export function setViewOverride(key: string, view: string) { views.set(key, view); viewTick++; viewSubs.forEach((f) => f()); }
+export function useViewOverride(key: string): string | undefined {
+  useSyncExternalStore((f) => { viewSubs.add(f); return () => { viewSubs.delete(f); }; }, () => viewTick, () => 0);
+  return views.get(key);
+}
+
+// --- fullscreen canvas modal (the board) ----------------------------------------------------------------------
+let canvasOpen = false;
+const canvasSubs = new Set<() => void>();
+export function setCanvasOpen(v: boolean) { canvasOpen = v; canvasSubs.forEach((f) => f()); }
+export const useCanvasOpen = () =>
+  useSyncExternalStore((f) => { canvasSubs.add(f); return () => { canvasSubs.delete(f); }; }, () => canvasOpen, () => false);
+/** Open a visual on the canvas: place it if new, raise it, show the modal. */
+export function expand(chatId: string, v: Visual, answer?: AnswerSpec, view?: string) {
+  pin(chatId, sourceKey(v), v, answer);
+  if (view) update(`${chatId}:${sourceKey(v)}`, { view }); // open in the view chosen inline
+  toFront(`${chatId}:${sourceKey(v)}`);
+  setCanvasOpen(true);
+}
+
+/** "make it a bar chart", "as a line", "show as table", "turn into graph" -> a view name, else null. */
+export function chartIntent(text: string): string | null {
+  const t = text.toLowerCase().trim();
+  if (t.length > 60 || !/\b(make|show|turn|switch|change|convert|display|render|view|as|into|to)\b/.test(t)) return null;
+  const m = t.match(/\b(bar|line|table|heat ?map|graph|chart|plot)s?\b/);
+  if (!m || /\b(which|what|how|why|when|who)\b/.test(t)) return null;
+  return { bar: "bar", line: "line", table: "table", heatmap: "heatmap", "heat map": "heatmap" }[m[1]] ?? "chart";
+}

@@ -51,3 +51,8 @@ body { background: rgb(var(--bg)); color: rgb(var(--fg)); font-family: var(--fon
 .board-card { animation: board-in 280ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes board-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .board-card { animation: none; } }
+.canvas-modal { animation: canvas-in 200ms ease-out both; }
+@keyframes canvas-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+.gen-ui { animation: board-in 320ms cubic-bezier(.2, .8, .2, 1) both; }
+.turn-in { animation: board-in 260ms ease-out both; }
+@media (prefers-reduced-motion: reduce) { .canvas-modal, .gen-ui, .turn-in { animation: none; } }

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AnswerSpec, HandleData } from "@/contracts";
 import { fetchHandle, rowsAsObjects } from "@/lib/api";
-import { close, clear, setBoardWidth, toFront, update, useBoard, type BoardCard } from "@/lib/board";
+import { close, clear, setBoardWidth, setCanvasOpen, toFront, update, useBoard, useCanvasOpen, type BoardCard } from "@/lib/board";
 import { SwitchableVisual, ViewSwitcher, viewsFor } from "@/components/visuals/Interactive";
 import { titleCase } from "@/lib/format";
 
@@ -80,13 +80,30 @@ export function Board() {
   return (
     <div ref={ref} className="board-grid relative h-full overflow-auto" data-testid="board">
       <div className="pointer-events-none sticky left-0 top-0 z-20 flex items-center gap-2 px-4 py-2">
-        <span className="rounded-md bg-panel/90 px-2 py-1 text-xs font-semibold shadow">Playboard · {cards.length} card{cards.length === 1 ? "" : "s"}</span>
+        <span className="rounded-md bg-panel/90 px-2 py-1 text-xs font-semibold shadow">Canvas · {cards.length} card{cards.length === 1 ? "" : "s"}</span>
         {cards.length > 0 && <button type="button" onClick={clear} className="pointer-events-auto rounded-md bg-panel/90 px-2 py-1 text-xs text-muted shadow hover:text-bad">Clear</button>}
+        <button type="button" onClick={() => setCanvasOpen(false)} data-testid="canvas-close" className="pointer-events-auto ml-auto rounded-md bg-panel/90 px-2.5 py-1 text-xs font-medium shadow hover:text-accent">Close · Esc</button>
       </div>
-      {cards.length === 0 && <p className="absolute inset-x-0 top-1/3 text-center text-sm text-muted">Ask a question. Every chart, table and map in an answer lands here; drag, resize and switch chart types.</p>}
+      {cards.length === 0 && <p className="absolute inset-x-0 top-1/3 text-center text-sm text-muted">Expand a chart from an answer to place it here; drag, resize and switch chart types.</p>}
       <div className="relative" style={{ width: extent.w, height: extent.h, marginTop: -40 }}>
         {cards.map((c) => <Card key={c.id} card={c} />)}
       </div>
+    </div>
+  );
+}
+
+/** The canvas as a fullscreen modal, opened from a chart's expand button. */
+export function CanvasModal() {
+  const open = useCanvasOpen();
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => e.key === "Escape" && setCanvasOpen(false);
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, [open]);
+  if (!open) return null;
+  return (
+    <div className="canvas-modal fixed inset-0 z-40 bg-bg" role="dialog" aria-modal="true" aria-label="Canvas">
+      <Board />
     </div>
   );
 }

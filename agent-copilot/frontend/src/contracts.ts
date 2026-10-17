@@ -64,7 +64,15 @@ export interface Conflict {
 
 export type VisualType =
   | "status_card" | "table" | "line" | "bar" | "map" | "heatmap" | "obligation_timeline"
-  | "correction_diff" | "conflict_card" | "evidence_chain" | "none";
+  | "correction_diff" | "conflict_card" | "evidence_chain" | "none"
+  // Generative UI extras (frontend catalog; data inline in encodings or bound by handle):
+  | "kpi" | "gauge" | "progress" | "timeline" | "list" | "compare" | "image" | "ingest_report" | "callout" | "tabs";
+
+/** POST /api/ingest response (multipart `file`). */
+export interface IngestReport {
+  file?: string; kind?: string; tables?: number | string[]; rows?: number; docs?: number | string[]; images?: number | string[];
+  summary?: string; preview?: Record<string, unknown>[] | unknown;
+}
 
 export interface Visual {
   type: VisualType;

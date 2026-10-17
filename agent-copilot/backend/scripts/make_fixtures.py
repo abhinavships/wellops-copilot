@@ -208,6 +208,26 @@ def q3() -> dict:
         assumptions=assumptions(ser, ["producing ⇔ wellhead − air ≥ the well type's threshold"])))
 
 
+def q5() -> dict:
+    q = "How many days was WELL-0001 down in 2025?"
+    r = Run("q5", "A number with its evidence", q, ["days", "down", "2025"], ["downtime-analysis", "visual-choice"])
+    ent = r.call("resolve_entity", tools.resolve_entity, text=q)
+    s, e = window_of(ent, "2025")
+    dt = r.call("downtime", tools.downtime, scope=tools.Scope(kind="wells", ids=["WELL-0001"]), start=s, end=e)
+    w = r.rows(dt)[0]
+    md = (f"WELL-0001 was down **{w['downtime_days']} days** in 2025: {w['non_producing_inspections']} weekly inspections "
+          f"found it not producing ({w['non_producing_dates']}).")
+    return r.finish(AnswerSpec(
+        markdown=md,
+        claims=[Claim(text=f"{w['downtime_days']} days", value=w["downtime_days"], handle=dt.handle, column="downtime_days")],
+        visuals=[Visual(type="kpi", handle=dt.handle, title="WELL-0001 downtime, 2025",
+                        encodings={"values": ["downtime_days", "non_producing_inspections", "inspections"],
+                                   "labels": {"downtime_days": "Days down", "non_producing_inspections": "Not-producing inspections",
+                                              "inspections": "Inspections in 2025"},
+                                   "units": {"downtime_days": "days"}})],
+        assumptions=assumptions(dt)))
+
+
 def q6() -> dict:
     q = "Which 3 wells in Northeast Block 7 had the most downtime in the last 4 months? Show a bar chart."
     r = Run("q6", "Compare wells", q, ["downtime", "northeast block 7", "bar"], ["downtime-analysis", "visual-choice"])
@@ -424,7 +444,7 @@ def main() -> None:
     db = get_db()
     db.run("DELETE FROM handles WHERE chat_id=?", [CHAT])
     db.run("DELETE FROM assertions WHERE source='chat' AND source_ref=?", [CHAT])
-    scenarios = [q1(), _q2(), q3(), q6(), q7(), q8(), q9(), q18(), *q12()]  # q12 last: its correction changes later answers
+    scenarios = [q1(), _q2(), q3(), q5(), q6(), q7(), q8(), q9(), q18(), *q12()]  # q12 last: its correction changes later answers
     data = {"generated_by": "backend/scripts/make_fixtures.py", "today": str(settings.clock_today),
             "dataset": settings.active_dataset, "scenarios": scenarios,
             "users": db.rows("SELECT user_id, name, role, team_id FROM users WHERE dataset_id=? ORDER BY user_id",

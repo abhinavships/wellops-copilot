@@ -2073,6 +2073,294 @@
    }
   },
   {
+   "id": "q5",
+   "label": "A number with its evidence",
+   "question": "How many days was WELL-0001 down in 2025?",
+   "keywords": [
+    "days",
+    "down",
+    "2025"
+   ],
+   "skills": [
+    "downtime-analysis",
+    "visual-choice"
+   ],
+   "tools": [
+    {
+     "name": "resolve_entity",
+     "args": {
+      "text": "How many days was WELL-0001 down in 2025?"
+     },
+     "ms": 60,
+     "handle": "r7",
+     "result": {
+      "handle": "r7",
+      "shape": "entity_list",
+      "columns": [
+       "kind",
+       "id",
+       "name",
+       "match",
+       "start",
+       "end",
+       "role"
+      ],
+      "preview": [
+       {
+        "kind": "well",
+        "id": "WELL-0001",
+        "name": "WELL-0001",
+        "match": "id",
+        "start": null,
+        "end": null,
+        "role": null
+       },
+       {
+        "kind": "date_range",
+        "id": "2025-01-01..2025-12-31",
+        "name": "2025",
+        "match": "window",
+        "start": "2025-01-01",
+        "end": "2025-12-31",
+        "role": null
+       }
+      ],
+      "row_count": 2,
+      "sql": null,
+      "citations": [],
+      "dq_flags": [
+       {
+        "entity_id": "WELL-0001",
+        "kind": "recorded_status_stale",
+        "detail": "recorded=active, latest Δ=3.2°C"
+       }
+      ],
+      "applied_overlays": [],
+      "notes": [
+       "dataset=sample",
+       "as-of 2026-10-17 23:59:59+00",
+       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
+      ],
+      "conflicts": [],
+      "related_handles": [],
+      "rows_truncated": false
+     }
+    },
+    {
+     "name": "downtime",
+     "args": {
+      "scope": {
+       "kind": "wells",
+       "ids": [
+        "WELL-0001"
+       ]
+      },
+      "start": "2025-01-01",
+      "end": "2025-12-31"
+     },
+     "ms": 60,
+     "handle": "r8",
+     "result": {
+      "handle": "r8",
+      "shape": "scalar",
+      "columns": [
+       "non_producing_inspections",
+       "downtime_days",
+       "inspections",
+       "non_producing_dates"
+      ],
+      "preview": [
+       {
+        "non_producing_inspections": 3,
+        "downtime_days": 21,
+        "inspections": 52,
+        "non_producing_dates": "2025-07-24, 2025-10-16, 2025-10-23"
+       }
+      ],
+      "row_count": 1,
+      "sql": "SELECT  count(*) FILTER (WHERE NOT e.producing) AS non_producing_inspections,\n  7 * count(*) FILTER (WHERE NOT e.producing) AS downtime_days, count(*) AS inspections, string_agg(strftime(e.inspected_at, '%Y-%m-%d'), ', ' ORDER BY e.inspected_at) FILTER (WHERE NOT e.producing) AS non_producing_dates\nFROM ins_eff('sample', TIMESTAMPTZ '2026-10-17 23:59:59+00') e JOIN areas a ON a.dataset_id = 'sample' AND a.area_id = e.area_id\nWHERE e.asset_id IN ('WELL-0001') AND e.inspected_at::DATE <= DATE '2025-12-31' AND e.inspected_at::DATE >= DATE '2025-01-01'\n ORDER BY 1",
+      "citations": [],
+      "dq_flags": [],
+      "applied_overlays": [],
+      "notes": [
+       "dataset=sample",
+       "as-of 2026-10-17 23:59:59+00",
+       "window 2025-01-01..2025-12-31 inclusive (UTC dates); wells WELL-0001",
+       "downtime = 7 days × inspections with Δ < threshold; missed inspections add 0; maintenance.downtime_hours is per repair job and is NOT used",
+       "ties at the top_k boundary are broken by well id"
+      ],
+      "conflicts": [],
+      "related_handles": [],
+      "rows_truncated": false
+     }
+    }
+   ],
+   "handles": {
+    "r7": {
+     "handle": "r7",
+     "shape": "entity_list",
+     "columns": [
+      "kind",
+      "id",
+      "name",
+      "match",
+      "start",
+      "end",
+      "role"
+     ],
+     "rows": [
+      {
+       "kind": "well",
+       "id": "WELL-0001",
+       "name": "WELL-0001",
+       "match": "id",
+       "start": null,
+       "end": null,
+       "role": null
+      },
+      {
+       "kind": "date_range",
+       "id": "2025-01-01..2025-12-31",
+       "name": "2025",
+       "match": "window",
+       "start": "2025-01-01",
+       "end": "2025-12-31",
+       "role": null
+      }
+     ],
+     "sql": null,
+     "citations": [],
+     "dq_flags": [
+      {
+       "entity_id": "WELL-0001",
+       "kind": "recorded_status_stale",
+       "detail": "recorded=active, latest Δ=3.2°C"
+      }
+     ],
+     "applied_overlays": [],
+     "notes": [
+      "dataset=sample",
+      "as-of 2026-10-17 23:59:59+00",
+      "relative dates resolved against today=2026-10-17; 'last N units' ends today"
+     ]
+    },
+    "r8": {
+     "handle": "r8",
+     "shape": "scalar",
+     "columns": [
+      "non_producing_inspections",
+      "downtime_days",
+      "inspections",
+      "non_producing_dates"
+     ],
+     "rows": [
+      {
+       "non_producing_inspections": 3,
+       "downtime_days": 21,
+       "inspections": 52,
+       "non_producing_dates": "2025-07-24, 2025-10-16, 2025-10-23"
+      }
+     ],
+     "sql": "SELECT  count(*) FILTER (WHERE NOT e.producing) AS non_producing_inspections,\n  7 * count(*) FILTER (WHERE NOT e.producing) AS downtime_days, count(*) AS inspections, string_agg(strftime(e.inspected_at, '%Y-%m-%d'), ', ' ORDER BY e.inspected_at) FILTER (WHERE NOT e.producing) AS non_producing_dates\nFROM ins_eff('sample', TIMESTAMPTZ '2026-10-17 23:59:59+00') e JOIN areas a ON a.dataset_id = 'sample' AND a.area_id = e.area_id\nWHERE e.asset_id IN ('WELL-0001') AND e.inspected_at::DATE <= DATE '2025-12-31' AND e.inspected_at::DATE >= DATE '2025-01-01'\n ORDER BY 1",
+     "citations": [],
+     "dq_flags": [],
+     "applied_overlays": [],
+     "notes": [
+      "dataset=sample",
+      "as-of 2026-10-17 23:59:59+00",
+      "window 2025-01-01..2025-12-31 inclusive (UTC dates); wells WELL-0001",
+      "downtime = 7 days × inspections with Δ < threshold; missed inspections add 0; maintenance.downtime_hours is per repair job and is NOT used",
+      "ties at the top_k boundary are broken by well id"
+     ]
+    }
+   },
+   "answer": {
+    "markdown": "WELL-0001 was down **21 days** in 2025: 3 weekly inspections found it not producing (2025-07-24, 2025-10-16, 2025-10-23).",
+    "claims": [
+     {
+      "text": "21 days",
+      "value": 21,
+      "handle": "r8",
+      "column": "downtime_days"
+     }
+    ],
+    "visuals": [
+     {
+      "type": "kpi",
+      "handle": "r8",
+      "title": "WELL-0001 downtime, 2025",
+      "encodings": {
+       "values": [
+        "downtime_days",
+        "non_producing_inspections",
+        "inspections"
+       ],
+       "labels": {
+        "downtime_days": "Days down",
+        "non_producing_inspections": "Not-producing inspections",
+        "inspections": "Inspections in 2025"
+       },
+       "units": {
+        "downtime_days": "days"
+       }
+      },
+      "annotations": [],
+      "requested_by_user": false
+     }
+    ],
+    "citations": [],
+    "conflicts": [],
+    "applied_overlays": [],
+    "assumptions": [
+     "as-of 2026-10-17 23:59:59+00",
+     "window 2025-01-01..2025-12-31 inclusive (UTC dates); wells WELL-0001",
+     "downtime = 7 days × inspections with Δ < threshold; missed inspections add 0; maintenance.downtime_hours is per repair job and is NOT used",
+     "ties at the top_k boundary are broken by well id",
+     "dataset sample"
+    ],
+    "follow_ups": []
+   },
+   "verification": {
+    "ok": true,
+    "retries": 0,
+    "gates": [
+     {
+      "name": "grounding",
+      "ok": true,
+      "detail": null
+     },
+     {
+      "name": "claims",
+      "ok": true,
+      "detail": null
+     },
+     {
+      "name": "disclosure",
+      "ok": true,
+      "detail": null
+     },
+     {
+      "name": "conflicts",
+      "ok": true,
+      "detail": null
+     },
+     {
+      "name": "visual_fit",
+      "ok": true,
+      "detail": null
+     },
+     {
+      "name": "assumptions",
+      "ok": true,
+      "detail": null
+     }
+    ]
+   },
+   "usage": {
+    "model": "none: tool fixtures (no LLM)"
+   }
+  },
+  {
    "id": "q6",
    "label": "Compare wells",
    "question": "Which 3 wells in Northeast Block 7 had the most downtime in the last 4 months? Show a bar chart.",
@@ -2092,9 +2380,9 @@
       "text": "Which 3 wells in Northeast Block 7 had the most downtime in the last 4 months? Show a bar chart."
      },
      "ms": 60,
-     "handle": "r7",
+     "handle": "r9",
      "result": {
-      "handle": "r7",
+      "handle": "r9",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -2155,9 +2443,9 @@
       "top_k": 3
      },
      "ms": 60,
-     "handle": "r8",
+     "handle": "r10",
      "result": {
-      "handle": "r8",
+      "handle": "r10",
       "shape": "category_measure",
       "columns": [
        "asset_id",
@@ -2216,8 +2504,8 @@
     }
    ],
    "handles": {
-    "r7": {
-     "handle": "r7",
+    "r9": {
+     "handle": "r9",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -2258,8 +2546,8 @@
       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
      ]
     },
-    "r8": {
-     "handle": "r8",
+    "r10": {
+     "handle": "r10",
      "shape": "category_measure",
      "columns": [
       "asset_id",
@@ -2318,7 +2606,7 @@
      {
       "text": "49 days",
       "value": 49,
-      "handle": "r8",
+      "handle": "r10",
       "column": "downtime_days",
       "row_key": {
        "asset_id": "WELL-0121"
@@ -2327,7 +2615,7 @@
      {
       "text": "42 days",
       "value": 42,
-      "handle": "r8",
+      "handle": "r10",
       "column": "downtime_days",
       "row_key": {
        "asset_id": "WELL-0107"
@@ -2336,7 +2624,7 @@
      {
       "text": "42 days",
       "value": 42,
-      "handle": "r8",
+      "handle": "r10",
       "column": "downtime_days",
       "row_key": {
        "asset_id": "WELL-0138"
@@ -2346,7 +2634,7 @@
     "visuals": [
      {
       "type": "bar",
-      "handle": "r8",
+      "handle": "r10",
       "title": "Northeast Block 7: downtime days, 2026-06-17 – 2026-10-17",
       "encodings": {
        "x": "asset_id",
@@ -2431,9 +2719,9 @@
       "text": "Show on a map every well in Northeast Block 8 with a real spill in the last 90 days."
      },
      "ms": 60,
-     "handle": "r9",
+     "handle": "r11",
      "result": {
-      "handle": "r9",
+      "handle": "r11",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -2492,9 +2780,9 @@
       "end": "2026-10-17"
      },
      "ms": 60,
-     "handle": "r11",
+     "handle": "r13",
      "result": {
-      "handle": "r11",
+      "handle": "r13",
       "shape": "geo_points",
       "columns": [
        "inspection_id",
@@ -2614,19 +2902,19 @@
        "as-of 2026-10-17 23:59:59+00",
        "window 2026-07-19..2026-10-17 inclusive; area Northeast Block 8",
        "real spill = detected and not corrected by a correction note/assertion (SOP-SR §7); class from corrected volume",
-       "2 corrected detection(s) excluded; see handle r10"
+       "2 corrected detection(s) excluded; see handle r12"
       ],
       "conflicts": [],
       "related_handles": [
-       "r10"
+       "r12"
       ],
       "rows_truncated": false
      }
     }
    ],
    "handles": {
-    "r9": {
-     "handle": "r9",
+    "r11": {
+     "handle": "r11",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -2667,8 +2955,8 @@
       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
      ]
     },
-    "r11": {
-     "handle": "r11",
+    "r13": {
+     "handle": "r13",
      "shape": "geo_points",
      "columns": [
       "inspection_id",
@@ -2787,7 +3075,7 @@
       "as-of 2026-10-17 23:59:59+00",
       "window 2026-07-19..2026-10-17 inclusive; area Northeast Block 8",
       "real spill = detected and not corrected by a correction note/assertion (SOP-SR §7); class from corrected volume",
-      "2 corrected detection(s) excluded; see handle r10"
+      "2 corrected detection(s) excluded; see handle r12"
      ]
     }
    },
@@ -2797,12 +3085,12 @@
      {
       "text": "4 wells",
       "value": 4,
-      "handle": "r11"
+      "handle": "r13"
      },
      {
       "text": "0.6 bbl",
       "value": 0.6,
-      "handle": "r11",
+      "handle": "r13",
       "column": "volume_bbl",
       "row_key": {
        "inspection_id": "INS-0186-0097"
@@ -2811,7 +3099,7 @@
      {
       "text": "1.2 bbl",
       "value": 1.2,
-      "handle": "r11",
+      "handle": "r13",
       "column": "volume_bbl",
       "row_key": {
        "inspection_id": "INS-0165-0194"
@@ -2820,7 +3108,7 @@
      {
       "text": "3.9 bbl",
       "value": 3.9,
-      "handle": "r11",
+      "handle": "r13",
       "column": "volume_bbl",
       "row_key": {
        "inspection_id": "INS-0175-0193"
@@ -2829,7 +3117,7 @@
      {
       "text": "4.5 bbl",
       "value": 4.5,
-      "handle": "r11",
+      "handle": "r13",
       "column": "volume_bbl",
       "row_key": {
        "inspection_id": "INS-0151-0201"
@@ -2839,7 +3127,7 @@
     "visuals": [
      {
       "type": "map",
-      "handle": "r11",
+      "handle": "r13",
       "title": "Northeast Block 8: real spills, last 90 days",
       "encodings": {
        "lat": "lat",
@@ -2875,7 +3163,7 @@
      "as-of 2026-10-17 23:59:59+00",
      "window 2026-07-19..2026-10-17 inclusive; area Northeast Block 8",
      "real spill = detected and not corrected by a correction note/assertion (SOP-SR §7); class from corrected volume",
-     "2 corrected detection(s) excluded; see handle r10",
+     "2 corrected detection(s) excluded; see handle r12",
      "dataset sample"
     ],
     "follow_ups": []
@@ -2940,9 +3228,9 @@
       "text": "Show a heatmap of 2026 spills by geographic area and month."
      },
      "ms": 60,
-     "handle": "r12",
+     "handle": "r14",
      "result": {
-      "handle": "r12",
+      "handle": "r14",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -2988,9 +3276,9 @@
       "group_by": "area_month"
      },
      "ms": 60,
-     "handle": "r13",
+     "handle": "r15",
      "result": {
-      "handle": "r13",
+      "handle": "r15",
       "shape": "matrix",
       "columns": [
        "area",
@@ -3115,9 +3403,9 @@
       "group_by": "area"
      },
      "ms": 60,
-     "handle": "r14",
+     "handle": "r16",
      "result": {
-      "handle": "r14",
+      "handle": "r16",
       "shape": "category_measure",
       "columns": [
        "area",
@@ -3164,8 +3452,8 @@
     }
    ],
    "handles": {
-    "r12": {
-     "handle": "r12",
+    "r14": {
+     "handle": "r14",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -3197,8 +3485,8 @@
       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
      ]
     },
-    "r13": {
-     "handle": "r13",
+    "r15": {
+     "handle": "r15",
      "shape": "matrix",
      "columns": [
       "area",
@@ -3447,8 +3735,8 @@
       "real spill = detected and not corrected by a correction note/assertion (SOP-SR §7); class from corrected volume"
      ]
     },
-    "r14": {
-     "handle": "r14",
+    "r16": {
+     "handle": "r16",
      "shape": "category_measure",
      "columns": [
       "area",
@@ -3495,7 +3783,7 @@
      {
       "text": "Northeast Block 7 37",
       "value": 37,
-      "handle": "r14",
+      "handle": "r16",
       "column": "spill_count",
       "row_key": {
        "area": "Northeast Block 7"
@@ -3504,7 +3792,7 @@
      {
       "text": "Northeast Block 8 26",
       "value": 26,
-      "handle": "r14",
+      "handle": "r16",
       "column": "spill_count",
       "row_key": {
        "area": "Northeast Block 8"
@@ -3513,7 +3801,7 @@
      {
       "text": "Southwest Block 23 35",
       "value": 35,
-      "handle": "r14",
+      "handle": "r16",
       "column": "spill_count",
       "row_key": {
        "area": "Southwest Block 23"
@@ -3522,7 +3810,7 @@
      {
       "text": "Southwest Block 24 43",
       "value": 43,
-      "handle": "r14",
+      "handle": "r16",
       "column": "spill_count",
       "row_key": {
        "area": "Southwest Block 24"
@@ -3532,7 +3820,7 @@
     "visuals": [
      {
       "type": "heatmap",
-      "handle": "r13",
+      "handle": "r15",
       "title": "Real spills per area per month, 2026",
       "encodings": {
        "x": "month",
@@ -3615,9 +3903,9 @@
       "text": "Which rules has WELL-0001 broken in the last 12 months, and what is still open?"
      },
      "ms": 60,
-     "handle": "r15",
+     "handle": "r17",
      "result": {
-      "handle": "r15",
+      "handle": "r17",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -3682,9 +3970,9 @@
       "end": "2026-10-17"
      },
      "ms": 60,
-     "handle": "r16",
+     "handle": "r18",
      "result": {
-      "handle": "r16",
+      "handle": "r18",
       "shape": "obligation_set",
       "columns": [
        "obligation_id",
@@ -3994,8 +4282,8 @@
     }
    ],
    "handles": {
-    "r15": {
-     "handle": "r15",
+    "r17": {
+     "handle": "r17",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -4042,8 +4330,8 @@
       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
      ]
     },
-    "r16": {
-     "handle": "r16",
+    "r18": {
+     "handle": "r18",
      "shape": "obligation_set",
      "columns": [
       "obligation_id",
@@ -4353,7 +4641,7 @@
      {
       "text": "breached",
       "value": "breached",
-      "handle": "r16",
+      "handle": "r18",
       "column": "state",
       "row_key": {
        "obligation_id": "WELL-0001:SR-01:INS-0001-0185"
@@ -4362,7 +4650,7 @@
      {
       "text": "breached",
       "value": "breached",
-      "handle": "r16",
+      "handle": "r18",
       "column": "state",
       "row_key": {
        "obligation_id": "WELL-0001:SR-02:INS-0001-0185"
@@ -4371,7 +4659,7 @@
      {
       "text": "breached",
       "value": "breached",
-      "handle": "r16",
+      "handle": "r18",
       "column": "state",
       "row_key": {
        "obligation_id": "WELL-0001:SR-03:INS-0001-0185"
@@ -4380,7 +4668,7 @@
      {
       "text": "breached",
       "value": "breached",
-      "handle": "r16",
+      "handle": "r18",
       "column": "state",
       "row_key": {
        "obligation_id": "WELL-0001:RC-04:REG-0001-002"
@@ -4390,7 +4678,7 @@
     "visuals": [
      {
       "type": "obligation_timeline",
-      "handle": "r16",
+      "handle": "r18",
       "title": "WELL-0001 obligations, last 12 months",
       "encodings": {},
       "annotations": [],
@@ -4469,9 +4757,9 @@
       "text": "Was the 20 Aug spill at WELL-0101 real oil?"
      },
      "ms": 60,
-     "handle": "r17",
+     "handle": "r19",
      "result": {
-      "handle": "r17",
+      "handle": "r19",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -4531,9 +4819,9 @@
       "end": "2026-08-20"
      },
      "ms": 60,
-     "handle": "r18",
+     "handle": "r20",
      "result": {
-      "handle": "r18",
+      "handle": "r20",
       "shape": "timeseries",
       "columns": [
        "date",
@@ -4596,9 +4884,9 @@
       "id": "INS-0101-0197"
      },
      "ms": 60,
-     "handle": "r19",
+     "handle": "r21",
      "result": {
-      "handle": "r19",
+      "handle": "r21",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -4993,8 +5281,8 @@
     }
    ],
    "handles": {
-    "r17": {
-     "handle": "r17",
+    "r19": {
+     "handle": "r19",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -5041,8 +5329,8 @@
       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
      ]
     },
-    "r18": {
-     "handle": "r18",
+    "r20": {
+     "handle": "r20",
      "shape": "timeseries",
      "columns": [
       "date",
@@ -5094,8 +5382,8 @@
       "missed inspections are absent, not zero-filled"
      ]
     },
-    "r19": {
-     "handle": "r19",
+    "r21": {
+     "handle": "r21",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -5584,14 +5872,14 @@
      {
       "text": "INS-0101-0197",
       "value": "INS-0101-0197",
-      "handle": "r18",
+      "handle": "r20",
       "column": "inspection_id"
      }
     ],
     "visuals": [
      {
       "type": "evidence_chain",
-      "handle": "r19",
+      "handle": "r21",
       "title": "Evidence chain for INS-0101-0197",
       "encodings": {},
       "annotations": [],
@@ -5701,9 +5989,9 @@
       "text": "The 15 Oct reading for WELL-0164 is wrong. The handheld thermal gun used in that inspection was faulty; the field crew re-measured the wellhead at 41.0 °C."
      },
      "ms": 60,
-     "handle": "r20",
+     "handle": "r22",
      "result": {
-      "handle": "r20",
+      "handle": "r22",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -5763,9 +6051,9 @@
       "end": "2026-10-15"
      },
      "ms": 60,
-     "handle": "r21",
+     "handle": "r23",
      "result": {
-      "handle": "r21",
+      "handle": "r23",
       "shape": "timeseries",
       "columns": [
        "date",
@@ -5849,11 +6137,11 @@
       "reason": "Handheld thermal gun faulty; field crew re-measured the wellhead at 41.0 °C",
       "valid_from": null,
       "valid_to": null,
-      "assertion_id": "A-18a9e972",
+      "assertion_id": "A-174214f1",
       "author_user_id": "U-201",
       "original_num": 24.0,
       "status": "confirmed",
-      "tx_time": "2026-10-17T07:30:29.678073Z",
+      "tx_time": "2026-10-17T08:08:17.955786Z",
       "conflicts": [
        {
         "subject": "INS-0164-0205 producing state",
@@ -5862,7 +6150,7 @@
           "source": "user_correction",
           "author": null,
           "says": "producing (wellhead +21.1 °C vs air; threshold 15 °C)",
-          "ref": "A-18a9e972"
+          "ref": "A-174214f1"
          },
          {
           "source": "inspection_note",
@@ -5884,12 +6172,12 @@
      "name": "sql",
      "args": {
       "shape": "diff",
-      "query": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = {ds} AND a.assertion_id = 'A-18a9e972'"
+      "query": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = {ds} AND a.assertion_id = 'A-174214f1'"
      },
      "ms": 60,
-     "handle": "r22",
+     "handle": "r24",
      "result": {
-      "handle": "r22",
+      "handle": "r24",
       "shape": "diff",
       "columns": [
        "assertion_id",
@@ -5904,7 +6192,7 @@
       ],
       "preview": [
        {
-        "assertion_id": "A-18a9e972",
+        "assertion_id": "A-174214f1",
         "inspection_id": "INS-0164-0205",
         "asset_id": "WELL-0164",
         "attribute": "wellhead_temp_c",
@@ -5916,11 +6204,11 @@
        }
       ],
       "row_count": 1,
-      "sql": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = 'sample' AND a.assertion_id = 'A-18a9e972'",
+      "sql": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = 'sample' AND a.assertion_id = 'A-174214f1'",
       "citations": [
        {
         "kind": "assertion",
-        "id": "A-18a9e972",
+        "id": "A-174214f1",
         "span": null,
         "label": null
        },
@@ -5939,7 +6227,7 @@
        }
       ],
       "applied_overlays": [
-       "A-18a9e972"
+       "A-174214f1"
       ],
       "notes": [
        "dataset=sample",
@@ -5963,9 +6251,9 @@
       }
      },
      "ms": 60,
-     "handle": "r23",
+     "handle": "r25",
      "result": {
-      "handle": "r23",
+      "handle": "r25",
       "shape": "entity",
       "columns": [
        "asset_id",
@@ -6014,7 +6302,7 @@
         "recorded_status": "active",
         "recorded_status_stale": false,
         "inspection_note": "Pump jack not moving.",
-        "wellhead_overlay": "A-18a9e972",
+        "wellhead_overlay": "A-174214f1",
         "ambient_overlay": null,
         "delta_rule": "rule:OM-T200 §9.3",
         "reason_summary": "producing",
@@ -6032,7 +6320,7 @@
        },
        {
         "kind": "assertion",
-        "id": "A-18a9e972",
+        "id": "A-174214f1",
         "span": null,
         "label": null
        }
@@ -6045,7 +6333,7 @@
        }
       ],
       "applied_overlays": [
-       "A-18a9e972"
+       "A-174214f1"
       ],
       "notes": [
        "dataset=sample",
@@ -6061,7 +6349,7 @@
           "source": "user_correction",
           "author": null,
           "says": "producing (wellhead +21.1 °C vs air; threshold 15 °C)",
-          "ref": "A-18a9e972"
+          "ref": "A-174214f1"
          },
          {
           "source": "inspection_note",
@@ -6080,8 +6368,8 @@
     }
    ],
    "handles": {
-    "r20": {
-     "handle": "r20",
+    "r22": {
+     "handle": "r22",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -6128,8 +6416,8 @@
       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
      ]
     },
-    "r21": {
-     "handle": "r21",
+    "r23": {
+     "handle": "r23",
      "shape": "timeseries",
      "columns": [
       "date",
@@ -6181,8 +6469,8 @@
       "missed inspections are absent, not zero-filled"
      ]
     },
-    "r22": {
-     "handle": "r22",
+    "r24": {
+     "handle": "r24",
      "shape": "diff",
      "columns": [
       "assertion_id",
@@ -6197,7 +6485,7 @@
      ],
      "rows": [
       {
-       "assertion_id": "A-18a9e972",
+       "assertion_id": "A-174214f1",
        "inspection_id": "INS-0164-0205",
        "asset_id": "WELL-0164",
        "attribute": "wellhead_temp_c",
@@ -6208,11 +6496,11 @@
        "status": "confirmed"
       }
      ],
-     "sql": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = 'sample' AND a.assertion_id = 'A-18a9e972'",
+     "sql": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = 'sample' AND a.assertion_id = 'A-174214f1'",
      "citations": [
       {
        "kind": "assertion",
-       "id": "A-18a9e972",
+       "id": "A-174214f1",
        "span": null,
        "label": null
       },
@@ -6231,7 +6519,7 @@
       }
      ],
      "applied_overlays": [
-      "A-18a9e972"
+      "A-174214f1"
      ],
      "notes": [
       "dataset=sample",
@@ -6240,8 +6528,8 @@
       "open SQL: model-written"
      ]
     },
-    "r23": {
-     "handle": "r23",
+    "r25": {
+     "handle": "r25",
      "shape": "entity",
      "columns": [
       "asset_id",
@@ -6290,7 +6578,7 @@
        "recorded_status": "active",
        "recorded_status_stale": false,
        "inspection_note": "Pump jack not moving.",
-       "wellhead_overlay": "A-18a9e972",
+       "wellhead_overlay": "A-174214f1",
        "ambient_overlay": null,
        "delta_rule": "rule:OM-T200 §9.3",
        "reason_summary": "producing",
@@ -6307,7 +6595,7 @@
       },
       {
        "kind": "assertion",
-       "id": "A-18a9e972",
+       "id": "A-174214f1",
        "span": null,
        "label": null
       }
@@ -6320,7 +6608,7 @@
       }
      ],
      "applied_overlays": [
-      "A-18a9e972"
+      "A-174214f1"
      ],
      "notes": [
       "dataset=sample",
@@ -6331,34 +6619,34 @@
     }
    },
    "answer": {
-    "markdown": "Recorded. Inspection **INS-0164-0205** (2026-10-15) wellhead temperature is corrected from **24.0 °C** to **41.0 °C** by Michael Turner; the original value is kept and the correction (A-18a9e972) applies to everyone now. You can undo it.\n\nWith 41.0 °C against 19.9 °C air (21.1 °C warmer, above the T200 limit of 15 °C), WELL-0164 **is producing oil**.\n\nThe same inspection has the note *“Pump jack not moving.”* (Tyler Hughes), which disagrees with the correction. Michael, can you confirm the well was running?",
+    "markdown": "Recorded. Inspection **INS-0164-0205** (2026-10-15) wellhead temperature is corrected from **24.0 °C** to **41.0 °C** by Michael Turner; the original value is kept and the correction (A-174214f1) applies to everyone now. You can undo it.\n\nWith 41.0 °C against 19.9 °C air (21.1 °C warmer, above the T200 limit of 15 °C), WELL-0164 **is producing oil**.\n\nThe same inspection has the note *“Pump jack not moving.”* (Tyler Hughes), which disagrees with the correction. Michael, can you confirm the well was running?",
     "claims": [
      {
       "text": "24.0 °C",
       "value": 24.0,
-      "handle": "r22",
+      "handle": "r24",
       "column": "original"
      },
      {
       "text": "41.0 °C",
       "value": 41.0,
-      "handle": "r22",
+      "handle": "r24",
       "column": "corrected"
      },
      {
       "text": "21.1 °C warmer",
       "value": 21.1,
-      "handle": "r23",
+      "handle": "r25",
       "column": "delta_c"
      }
     ],
     "visuals": [
      {
       "type": "correction_diff",
-      "handle": "r22",
-      "title": "Correction A-18a9e972",
+      "handle": "r24",
+      "title": "Correction A-174214f1",
       "encodings": {
-       "assertion_id": "A-18a9e972",
+       "assertion_id": "A-174214f1",
        "before": "original",
        "after": "corrected"
       },
@@ -6378,7 +6666,7 @@
     "citations": [
      {
       "kind": "assertion",
-      "id": "A-18a9e972"
+      "id": "A-174214f1"
      },
      {
       "kind": "inspection",
@@ -6393,7 +6681,7 @@
         "source": "user_correction",
         "author": null,
         "says": "producing (wellhead +21.1 °C vs air; threshold 15 °C)",
-        "ref": "A-18a9e972"
+        "ref": "A-174214f1"
        },
        {
         "source": "inspection_note",
@@ -6407,7 +6695,7 @@
      }
     ],
     "applied_overlays": [
-     "A-18a9e972"
+     "A-174214f1"
     ],
     "assumptions": [
      "correction scoped to inspection INS-0164-0205",
@@ -6477,9 +6765,9 @@
       "text": "After that correction, which wells in Northeast Block 8 are not producing oil right now, and why?"
      },
      "ms": 60,
-     "handle": "r24",
+     "handle": "r26",
      "result": {
-      "handle": "r24",
+      "handle": "r26",
       "shape": "entity_list",
       "columns": [
        "kind",
@@ -6537,9 +6825,9 @@
       "only": "not_producing"
      },
      "ms": 60,
-     "handle": "r25",
+     "handle": "r27",
      "result": {
-      "handle": "r25",
+      "handle": "r27",
       "shape": "entity_list",
       "columns": [
        "asset_id",
@@ -6737,8 +7025,8 @@
     }
    ],
    "handles": {
-    "r24": {
-     "handle": "r24",
+    "r26": {
+     "handle": "r26",
      "shape": "entity_list",
      "columns": [
       "kind",
@@ -6779,8 +7067,8 @@
       "relative dates resolved against today=2026-10-17; 'last N units' ends today"
      ]
     },
-    "r25": {
-     "handle": "r25",
+    "r27": {
+     "handle": "r27",
      "shape": "entity_list",
      "columns": [
       "asset_id",
@@ -6971,8 +7259,8 @@
       "scope: area Northeast Block 8"
      ]
     },
-    "r22": {
-     "handle": "r22",
+    "r24": {
+     "handle": "r24",
      "shape": "diff",
      "columns": [
       "assertion_id",
@@ -6987,7 +7275,7 @@
      ],
      "rows": [
       {
-       "assertion_id": "A-18a9e972",
+       "assertion_id": "A-174214f1",
        "inspection_id": "INS-0164-0205",
        "asset_id": "WELL-0164",
        "attribute": "wellhead_temp_c",
@@ -6998,11 +7286,11 @@
        "status": "confirmed"
       }
      ],
-     "sql": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = 'sample' AND a.assertion_id = 'A-18a9e972'",
+     "sql": "SELECT a.assertion_id, a.scope_key AS inspection_id, i.asset_id, a.target_attr AS attribute, a.original_num AS original, a.value_num AS corrected, u.name AS author, a.reason, a.status FROM assertions a JOIN inspections i ON i.dataset_id = a.dataset_id AND i.inspection_id = a.scope_key LEFT JOIN users u ON u.dataset_id = a.dataset_id AND u.user_id = a.author_user_id WHERE a.dataset_id = 'sample' AND a.assertion_id = 'A-174214f1'",
      "citations": [
       {
        "kind": "assertion",
-       "id": "A-18a9e972",
+       "id": "A-174214f1",
        "span": null,
        "label": null
       },
@@ -7021,7 +7309,7 @@
       }
      ],
      "applied_overlays": [
-      "A-18a9e972"
+      "A-174214f1"
      ],
      "notes": [
       "dataset=sample",
@@ -7030,8 +7318,8 @@
       "open SQL: model-written"
      ]
     },
-    "r23": {
-     "handle": "r23",
+    "r25": {
+     "handle": "r25",
      "shape": "entity",
      "columns": [
       "asset_id",
@@ -7080,7 +7368,7 @@
        "recorded_status": "active",
        "recorded_status_stale": false,
        "inspection_note": "Pump jack not moving.",
-       "wellhead_overlay": "A-18a9e972",
+       "wellhead_overlay": "A-174214f1",
        "ambient_overlay": null,
        "delta_rule": "rule:OM-T200 §9.3",
        "reason_summary": "producing",
@@ -7097,7 +7385,7 @@
       },
       {
        "kind": "assertion",
-       "id": "A-18a9e972",
+       "id": "A-174214f1",
        "span": null,
        "label": null
       }
@@ -7110,7 +7398,7 @@
       }
      ],
      "applied_overlays": [
-      "A-18a9e972"
+      "A-174214f1"
      ],
      "notes": [
       "dataset=sample",
@@ -7121,17 +7409,17 @@
     }
    },
    "answer": {
-    "markdown": "**3 wells** in Northeast Block 8 are not producing oil right now, judged by each well's latest inspection.\n\n- **WELL-0170**: 2.9 °C above air. MNT-0170-031: corrective pump_jack: Walking beam bearing wear; started 2026-09-19, planned end 2026-10-27 (open at reading)\n- **WELL-0172**: 5.7 °C above air (recorded status out of date). MNT-0172-028: corrective flowline: Flowline corrosion pinhole leak; started 2026-10-03, planned end 2026-10-21 (open at reading)\n- **WELL-0175**: 0.4 °C above air (recorded status out of date). **No recorded reason**\n\n1 has no recorded reason. Nothing in the data explains the stop, so I suggest a site check rather than guessing a cause.\n\nWELL-0164 is no longer listed: its 2026-10-15 reading was corrected to 41.0 °C by Michael Turner (A-18a9e972), so it counts as producing.",
+    "markdown": "**3 wells** in Northeast Block 8 are not producing oil right now, judged by each well's latest inspection.\n\n- **WELL-0170**: 2.9 °C above air. MNT-0170-031: corrective pump_jack: Walking beam bearing wear; started 2026-09-19, planned end 2026-10-27 (open at reading)\n- **WELL-0172**: 5.7 °C above air (recorded status out of date). MNT-0172-028: corrective flowline: Flowline corrosion pinhole leak; started 2026-10-03, planned end 2026-10-21 (open at reading)\n- **WELL-0175**: 0.4 °C above air (recorded status out of date). **No recorded reason**\n\n1 has no recorded reason. Nothing in the data explains the stop, so I suggest a site check rather than guessing a cause.\n\nWELL-0164 is no longer listed: its 2026-10-15 reading was corrected to 41.0 °C by Michael Turner (A-174214f1), so it counts as producing.",
     "claims": [
      {
       "text": "3 wells",
       "value": 3,
-      "handle": "r25"
+      "handle": "r27"
      },
      {
       "text": "2.9 °C",
       "value": 2.9,
-      "handle": "r25",
+      "handle": "r27",
       "column": "delta_c",
       "row_key": {
        "asset_id": "WELL-0170"
@@ -7140,7 +7428,7 @@
      {
       "text": "5.7 °C",
       "value": 5.7,
-      "handle": "r25",
+      "handle": "r27",
       "column": "delta_c",
       "row_key": {
        "asset_id": "WELL-0172"
@@ -7149,7 +7437,7 @@
      {
       "text": "0.4 °C",
       "value": 0.4,
-      "handle": "r25",
+      "handle": "r27",
       "column": "delta_c",
       "row_key": {
        "asset_id": "WELL-0175"
@@ -7159,7 +7447,7 @@
     "visuals": [
      {
       "type": "table",
-      "handle": "r25",
+      "handle": "r27",
       "title": "Northeast Block 8: not producing now",
       "encodings": {
        "columns": [
@@ -7188,7 +7476,7 @@
      },
      {
       "kind": "assertion",
-      "id": "A-18a9e972"
+      "id": "A-174214f1"
      }
     ],
     "conflicts": [
@@ -7199,7 +7487,7 @@
         "source": "user_correction",
         "author": null,
         "says": "producing (wellhead +21.1 °C vs air; threshold 15 °C)",
-        "ref": "A-18a9e972"
+        "ref": "A-174214f1"
        },
        {
         "source": "inspection_note",
@@ -7213,7 +7501,7 @@
      }
     ],
     "applied_overlays": [
-     "A-18a9e972"
+     "A-174214f1"
     ],
     "assumptions": [
      "as-of 2026-10-17 23:59:59+00",
@@ -8236,11 +8524,11 @@
     "report_file": "maintenance-reports/MNT-0101-029.md"
    }
   },
-  "assertion:A-18a9e972": {
+  "assertion:A-174214f1": {
    "kind": "assertion",
-   "id": "A-18a9e972",
+   "id": "A-174214f1",
    "record": {
-    "assertion_id": "A-18a9e972",
+    "assertion_id": "A-174214f1",
     "dataset_id": "sample",
     "kind": "value_correction",
     "scope_level": "inspection",
@@ -8255,7 +8543,7 @@
     "source_ref": "fixtures",
     "valid_from": null,
     "valid_to": null,
-    "tx_time": "2026-10-17 07:30:29.678073Z",
+    "tx_time": "2026-10-17 08:08:17.955786Z",
     "status": "confirmed",
     "visibility": "fleet",
     "superseded_by": null

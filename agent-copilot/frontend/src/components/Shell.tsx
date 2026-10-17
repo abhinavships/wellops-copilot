@@ -1,17 +1,19 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatSummary, User } from "@/contracts";
-import { DEFAULT_TODAY, MOCK, fetchChats, fetchUsers, type Ctx } from "@/lib/api";
+import { DEFAULT_TODAY, MOCK, fetchChats, fetchHandle, fetchUsers, ingestFile, type Ctx } from "@/lib/api";
 import { uid } from "@/lib/agui";
 import { useChat } from "@/lib/chat";
 import { SCENARIOS } from "@/mock/fixtures";
 import { AnswerView } from "@/components/AnswerView";
 import { EvidenceDrawer } from "@/components/EvidenceDrawer";
 import { Sidebar } from "@/components/Sidebar";
-import { ToolChip } from "@/components/ToolChip";
 import { UiContext, type EvidenceTarget } from "@/components/ui";
 import { XrayPanel } from "@/components/XrayPanel";
-import { Board } from "@/components/Board";
+import { CanvasModal } from "@/components/Board";
+import { viewsFor } from "@/components/visuals/Interactive";
+import { chartIntent, setCanvasOpen, setViewOverride, useBoard, viewKey } from "@/lib/board";
+import { titleCase } from "@/lib/format";
 import { MicButton, SpeakButton, VoiceToggle } from "@/components/Voice";
 import { firstSentences, speak, useDictation } from "@/lib/voice";
 
@@ -30,8 +32,10 @@ export function Shell() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [leftOpen, setLeftOpen] = useState(false);
   const [xrayOpen, setXrayOpen] = useState(false);
-  const [xrayDesktop, setXrayDesktop] = useState(true);
-  const [view, setView] = useState<"chat" | "split" | "board">("chat"); // chat | chat + playboard | playboard
+  const [xrayDesktop, setXrayDesktop] = useState(false); // X-ray is opt-in, from the menu
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [evidence, setEvidence] = useState<EvidenceTarget | null>(null);
   const [selTurn, setSelTurn] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -39,7 +43,8 @@ export function Shell() {
   const bottom = useRef<HTMLDivElement>(null);
 
   const ctx: Ctx = useMemo(() => ({ userId, chatId, today }), [userId, chatId, today]);
-  const { turns, busy, send, stop } = useChat(ctx);
+  const { turns, busy, send, stop, addLocal } = useChat(ctx);
+  const boardCount = useBoard().length;
 
   // restore preferences
   useEffect(() => {
@@ -81,7 +86,40 @@ export function Shell() {
   useEffect(() => { bottom.current?.scrollIntoView({ block: "end", behavior: "smooth" }); }, [turns]);
   useEffect(() => { setSelTurn(null); }, [chatId]);
 
-  const submit = useCallback((text: string, scenario?: string) => { const t = text.trim(); if (!t || busy) return; setInput(""); send(t, scenario); }, [busy, send]);
+  // "make it a bar chart" etc. re-renders the latest visual in the client; anything else goes to the agent.
+  const switchChart = useCallback(async (t: string, want: string): Promise<boolean> => {
+    const lastWithVisual = [...turns].reverse().find((x) => (x.answer?.visuals ?? []).some((v) => v.type !== "none"));
+    const vs = (lastWithVisual?.answer?.visuals ?? []).filter((v) => v.type !== "none");
+    if (!vs.length) return false;
+    const done: string[] = [], options = new Set<string>();
+    for (const v of vs) {
+      const data = v.handle ? await fetchHandle(v.handle, chatId).catch(() => null) : null;
+      const views = viewsFor(v, data);
+      views.forEach((x) => options.add(x));
+      const target = want === "chart" ? views.find((x) => x !== "table") : views.includes(want) ? want : undefined;
+      if (target) { setViewOverride(viewKey(chatId, v), target); done.push(target); }
+    }
+    addLocal(t, { markdown: done.length ? `Switched to ${done.map((d) => (d === "table" ? "a table" : `a ${d} chart`)).join(" and ")}.`
+      : `That view doesn't fit this data. Try ${[...options].map(titleCase).join(", ") || "another question"}.` });
+    return true;
+  }, [turns, chatId, addLocal]);
+  const submit = useCallback((text: string, scenario?: string) => {
+    const t = text.trim(); if (!t || busy) return; setInput("");
+    const want = scenario ? null : chartIntent(t);
+    if (want) { switchChart(t, want).then((ok) => { if (!ok) send(t); }); return; }
+    send(t, scenario);
+  }, [busy, send, switchChart]);
+  const upload = useCallback(async (files: FileList | File[]) => {
+    for (const f of Array.from(files)) {
+      try {
+        const report = await ingestFile(f, ctx);
+        addLocal(`Uploaded ${f.name}`, { markdown: report.summary?.split(/(?<=\.)\s/)[0] ?? `Ingested ${f.name}.`,
+          visuals: [{ type: "ingest_report", title: f.name, encodings: { report } }] });
+      } catch (e) {
+        addLocal(`Uploaded ${f.name}`, { markdown: `Could not ingest ${f.name}: ${(e as Error).message}` });
+      }
+    }
+  }, [ctx, addLocal]);
   const ui = useMemo(() => ({ ctx, openEvidence: setEvidence, send: (t: string) => submit(t) }), [ctx, submit]);
 
   // voice: dictation fills the composer (auto-sends in voice mode); voice mode reads new answers aloud. Off by default.
@@ -104,10 +142,34 @@ export function Shell() {
   );
   const xray = <XrayPanel turns={turns} selected={selTurn} onSelect={setSelTurn} />;
 
+  const iconBtn = "grid h-9 w-9 place-items-center rounded-full text-muted transition hover:bg-raised hover:text-fg disabled:opacity-40";
+  const composer = (
+    <form onSubmit={(e) => { e.preventDefault(); submit(input); }}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}
+      className={`rounded-[28px] border bg-panel p-2 shadow-[0_2px_6px_rgb(0_0_0/.04),0_12px_40px_-16px_rgb(0_0_0/.18)] transition ${dragOver ? "border-accent ring-4 ring-accent/15" : "border-line"}`}>
+      <label htmlFor="msg" className="sr-only">Message</label>
+      <textarea id="msg" rows={2} value={input} onChange={(e) => setInput(e.target.value)} placeholder={dragOver ? "Drop to upload…" : "Ask anything about your wells…"}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input); } }}
+        className="max-h-48 min-h-14 w-full resize-none bg-transparent px-3 pt-2 text-[15px] outline-none placeholder:text-muted" />
+      <div className="flex items-center gap-1 px-1">
+        <input ref={fileRef} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = ""; }} />
+        <button type="button" className={iconBtn} onClick={() => fileRef.current?.click()} aria-label="Attach a file" title="Attach a file (or drop it here)">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><path d="M16 9.5 9.6 15.9a4 4 0 0 1-5.7-5.7l6.8-6.8a2.7 2.7 0 0 1 3.8 3.8l-6.7 6.7a1.3 1.3 0 0 1-1.9-1.9L12 6" /></svg>
+        </button>
+        <MicButton listening={dictation.listening} supported={dictation.supported} onToggle={dictation.toggle} />
+        <span className="flex-1" />
+        {busy ? <button type="button" onClick={stop} aria-label="Stop" className="grid h-9 w-9 place-items-center rounded-full bg-fg text-bg"><span className="h-3 w-3 rounded-sm bg-bg" /></button>
+          : <button type="submit" disabled={!input.trim()} aria-label="Send" className="grid h-9 w-9 place-items-center rounded-full bg-fg text-bg transition disabled:opacity-25">
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M10 16V4M5 9l5-5 5 5" /></svg></button>}
+      </div>
+    </form>
+  );
+
   return (
     <UiContext.Provider value={ui}>
-      <div className="flex h-dvh overflow-hidden">
-        <aside className="hidden w-72 shrink-0 border-r border-line bg-panel md:block" aria-label="Sidebar">{sidebar}</aside>
+      <div className="flex h-dvh overflow-hidden bg-bg">
+        <aside className="hidden w-64 shrink-0 border-r border-line/60 bg-panel/40 md:block" aria-label="Sidebar">{sidebar}</aside>
         {leftOpen && (
           <div className="fixed inset-0 z-30 md:hidden">
             <button type="button" aria-label="Close menu" className="absolute inset-0 bg-black/40" onClick={() => setLeftOpen(false)} />
@@ -115,71 +177,60 @@ export function Shell() {
           </div>
         )}
 
-        <main className={`min-w-0 flex-col ${view === "board" ? "hidden" : "flex"} ${view === "split" ? "w-[440px] shrink-0 border-r border-line" : "flex-1"}`}>
-          <header className="flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
-            <button type="button" className="rounded-md border border-line px-2 py-1 text-sm md:hidden" onClick={() => setLeftOpen(true)} aria-label="Open menu">☰</button>
-            <h1 className="flex min-w-0 flex-1 items-baseline gap-2 text-sm font-semibold"><span className="truncate">{chats.find((c) => c.chat_id === chatId)?.title || "New chat"}</span><span className="hidden shrink-0 font-normal text-muted sm:inline">as of {today}</span></h1>
-            <button type="button" className="rounded-md border border-line px-2 py-1 text-xs hover:border-accent"
-              onClick={() => setTheme((t) => (t === "dark" ? "light" : t === "light" ? "system" : "dark"))} aria-label={`Theme: ${theme}. Click to change`}>
-              {theme === "dark" ? "Dark" : theme === "light" ? "Light" : "Auto"}
-            </button>
-            <VoiceToggle on={voiceOn} onChange={toggleVoice} />
-            <button type="button" aria-pressed={xrayDesktop && xrayOpen} className="rounded-md border border-line px-2 py-1 text-xs hover:border-accent"
-              onClick={() => { if (window.matchMedia("(min-width:1024px)").matches) setXrayDesktop((v) => !v); else setXrayOpen((v) => !v); }}>X-ray</button>
-            <button type="button" data-testid="view-toggle" className="rounded-md border border-line px-2 py-1 text-xs hover:border-accent" aria-label={`View: ${view}. Click to change`}
-              onClick={() => { const n = view === "chat" ? "split" : view === "split" ? "board" : "chat"; setView(n); if (n !== "chat") setXrayDesktop(false); }}>{view === "chat" ? "Chat" : view === "split" ? "Chat + Board" : "Board"}</button>
+        <main className="flex min-w-0 flex-1 flex-col">
+          <header className="flex items-center gap-2 px-4 py-3">
+            <button type="button" className={`${iconBtn} md:hidden`} onClick={() => setLeftOpen(true)} aria-label="Open menu">☰</button>
+            <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-muted">{chats.find((c) => c.chat_id === chatId)?.title || "New chat"}</h1>
+            {boardCount > 0 && <button type="button" onClick={() => setCanvasOpen(true)} className="rounded-full px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg">Canvas · {boardCount}</button>}
+            <div className="relative">
+              <button type="button" className={iconBtn} aria-label="More" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)} data-testid="menu">
+                <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden><circle cx="4" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="16" cy="10" r="1.6" /></svg>
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 z-30 mt-1 w-56 rounded-2xl border border-line bg-panel p-1.5 text-sm shadow-xl" role="menu" onMouseLeave={() => setMenuOpen(false)}>
+                  <button type="button" role="menuitem" className="flex w-full justify-between rounded-xl px-3 py-2 hover:bg-raised"
+                    onClick={() => setTheme((t) => (t === "dark" ? "light" : t === "light" ? "system" : "dark"))}>Theme<span className="text-muted">{titleCase(theme)}</span></button>
+                  <button type="button" role="menuitem" className="flex w-full justify-between rounded-xl px-3 py-2 hover:bg-raised"
+                    onClick={() => { if (window.matchMedia("(min-width:1024px)").matches) setXrayDesktop((v) => !v); else setXrayOpen((v) => !v); setMenuOpen(false); }}>X-ray panel<span className="text-muted">{xrayDesktop ? "On" : "Off"}</span></button>
+                  <button type="button" role="menuitem" className="flex w-full justify-between rounded-xl px-3 py-2 hover:bg-raised" onClick={() => { setCanvasOpen(true); setMenuOpen(false); }}>Open canvas<span className="text-muted">{boardCount}</span></button>
+                  <div className="flex items-center justify-between rounded-xl px-3 py-2"><span>Voice</span><VoiceToggle on={voiceOn} onChange={toggleVoice} /></div>
+                  <div className="px-3 pb-1 pt-2 text-[11px] text-muted">As of {today}{MOCK ? " · fixture data" : ""}</div>
+                </div>
+              )}
+            </div>
           </header>
 
           <div className="flex-1 overflow-y-auto" role="log" aria-label="Conversation">
-            <div className="mx-auto w-full max-w-3xl space-y-6 px-3 py-5 sm:px-5">
-              {loadErr && <p role="alert" className="rounded-lg border border-bad/30 bg-bad/10 p-3 text-sm text-bad">{loadErr}. Is the backend running at the configured API base? Use NEXT_PUBLIC_MOCK=1 for the demo fixtures.</p>}
+            <div className="mx-auto w-full max-w-[720px] space-y-10 px-4 pb-10 pt-4">
+              {loadErr && <p role="alert" className="rounded-2xl border border-bad/30 bg-bad/10 p-3 text-sm text-bad">{loadErr}. Is the backend running at the configured API base?</p>}
               {turns.length === 0 && (
-                <div className="py-8">
-                  <h2 className="text-xl font-semibold">What do you want to know about the fleet?</h2>
-                  <p className="mt-1 text-sm text-muted">Answers are drawn from the data, with every figure traceable to a record. Try one:</p>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="flex min-h-[60vh] flex-col justify-center">
+                  <h2 className="text-center text-3xl font-semibold tracking-tight">What do you want to know?</h2>
+                  <p className="mt-2 text-center text-sm text-muted">Every figure traces back to a record.</p>
+                  <div className="mt-8">{composer}</div>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
                     {SCENARIOS.map((s) => (
-                      <button key={s.id} type="button" onClick={() => submit(s.question, s.id)} data-testid={`suggest-${s.id}`}
-                        className="rounded-xl border border-line bg-panel p-3 text-left text-sm hover:border-accent">
-                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted">{s.label}</span>
-                        <span className="mt-0.5 block">{s.question}</span>
-                      </button>
+                      <button key={s.id} type="button" onClick={() => submit(s.question, s.id)} data-testid={`suggest-${s.id}`} title={s.question}
+                        className="rounded-full border border-line px-3 py-1.5 text-xs text-muted transition hover:border-fg/30 hover:text-fg">{s.label}</button>
                     ))}
                   </div>
                 </div>
               )}
               {turns.map((t) => (
-                <article key={t.id} data-testid="turn" data-status={t.status} className="space-y-3" onClick={() => setSelTurn(t.id)}>
-                  <div className="flex justify-end"><p className="max-w-[85%] rounded-2xl rounded-br-sm bg-accent px-3.5 py-2 text-sm text-accent-fg">{t.userText}</p></div>
-                  {t.tools.length > 0 && <div className="flex flex-wrap gap-1.5" aria-label="Tool calls">{t.tools.map((c) => <ToolChip key={c.id} call={c} />)}</div>}
-                  {t.status === "error" && <p role="alert" className="rounded-lg border border-bad/30 bg-bad/10 p-3 text-sm text-bad">The run failed: {t.error}</p>}
-                  {(t.text || t.answer) ? <AnswerView answer={t.answer} text={t.text} streaming={t.status === "running" && !t.answer} />
-                    : t.status === "running" && <p className="text-sm text-muted">Thinking<span className="dots"><span>.</span><span>.</span><span>.</span></span></p>}
-                  {t.answer && t.status === "done" && <SpeakButton markdown={t.answer.markdown} />}
+                <article key={t.id} data-testid="turn" data-status={t.status} className="turn-in space-y-4" onClick={() => setSelTurn(t.id)}>
+                  <div className="flex justify-end"><p className="max-w-[80%] rounded-3xl bg-raised px-4 py-2.5 text-[15px]">{t.userText}</p></div>
+                  {t.status === "error" && <p role="alert" className="rounded-2xl border border-bad/30 bg-bad/10 p-3 text-sm text-bad">The run failed: {t.error}</p>}
+                  {(t.text || t.answer) ? <AnswerView answer={t.answer} text={t.text} streaming={t.status === "running" && !t.answer} turn={t} />
+                    : t.status === "running" && <p className="text-sm text-muted">{t.tools.length ? `Working · ${t.tools[t.tools.length - 1].name.replace(/_/g, " ")}` : "Thinking"}<span className="dots"><span>.</span><span>.</span><span>.</span></span></p>}
+                  {t.answer && t.status === "done" && voiceOn && <SpeakButton markdown={t.answer.markdown} />}
                 </article>
               ))}
               <div ref={bottom} />
             </div>
           </div>
 
-          <form className="border-t border-line bg-panel p-3" onSubmit={(e) => { e.preventDefault(); submit(input); }}>
-            <div className="mx-auto flex max-w-3xl items-end gap-2">
-              <label htmlFor="msg" className="sr-only">Message</label>
-              <textarea id="msg" rows={1} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask about wells, spills, downtime, obligations…"
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input); } }}
-                className="max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-line bg-bg px-3 py-2 text-sm" />
-              <MicButton listening={dictation.listening} supported={dictation.supported} onToggle={dictation.toggle} />
-              {busy ? <button type="button" onClick={stop} className="h-10 rounded-xl border border-line px-4 text-sm font-semibold hover:border-bad">Stop</button>
-                : <button type="submit" disabled={!input.trim()} className="h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-50">Send</button>}
-            </div>
-          </form>
+          {turns.length > 0 && <div className="mx-auto w-full max-w-[720px] px-4 pb-4">{composer}</div>}
         </main>
-        {view !== "chat" && (
-          <section className="relative min-w-0 flex-1" aria-label="Playboard">
-            {view === "board" && <button type="button" onClick={() => setView("split")} className="absolute right-3 top-2 z-30 rounded-md border border-line bg-panel px-2 py-1 text-xs shadow">Show chat</button>}
-            <Board />
-          </section>
-        )}
 
         {xrayDesktop && <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-line bg-panel lg:block" aria-label="X-ray panel">
           <div className="border-b border-line px-4 py-2 text-sm font-semibold">X-ray</div>{xray}</aside>}
@@ -191,6 +242,7 @@ export function Shell() {
           </div>
         )}
       </div>
+      <CanvasModal />
       <EvidenceDrawer target={evidence} ctx={ctx} onClose={() => setEvidence(null)} />
     </UiContext.Provider>
   );

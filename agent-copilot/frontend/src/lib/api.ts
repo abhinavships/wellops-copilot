@@ -1,4 +1,4 @@
-import type { ChatSummary, Citation, HandleData, RecordData, User } from "@/contracts";
+import type { ChatSummary, Citation, HandleData, IngestReport, RecordData, User } from "@/contracts";
 import { MOCK_RECORDS, MOCK_USERS, SCENARIOS } from "@/mock/fixtures";
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
@@ -80,4 +80,15 @@ export async function fetchRecord(kind: string, id: string, c: Ctx): Promise<Rec
 export function rowsAsObjects(h: HandleData): Record<string, unknown>[] {
   const rows = h.rows as unknown[];
   return rows.map((r) => (Array.isArray(r) ? Object.fromEntries(h.columns.map((c, i) => [c, r[i]])) : (r as Record<string, unknown>)));
+}
+
+/** POST /api/ingest (multipart `file`) -> IngestReport. Mock mode does not upload; it reports what it saw. */
+export async function ingestFile(file: File, c: Ctx): Promise<IngestReport> {
+  if (MOCK) return { file: file.name, kind: file.type || "unknown", tables: 0, rows: 0, docs: 0, images: 0,
+    summary: `Mock mode: ${file.name} (${Math.round(file.size / 1024)} KB) was not uploaded. Start the API to ingest it.` };
+  const fd = new FormData(); fd.append("file", file);
+  const h = ctxHeaders(c); delete h["Content-Type"]; // the browser sets the multipart boundary
+  const r = await fetch(`${API_BASE}/api/ingest`, { method: "POST", headers: h, body: fd });
+  if (!r.ok) throw new Error(`Upload failed: HTTP ${r.status}${r.status === 404 ? " (is /api/ingest deployed?)" : ""}`);
+  return (await r.json()) as IngestReport;
 }
