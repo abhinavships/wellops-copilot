@@ -1,0 +1,34 @@
+data: {"type":"RUN_STARTED","timestamp":1792221348582,"threadId":"cap1","runId":"8cd39ce8-e7a0-4b49-a80e-92178ac11bf2"}
+
+data: {"type":"TEXT_MESSAGE_START","timestamp":1792221348592,"messageId":"6e6c2c39-e632-41f0-9f48-e44db17962c4","role":"assistant"}
+
+data: {"type":"TEXT_MESSAGE_END","timestamp":1792221348592,"messageId":"6e6c2c39-e632-41f0-9f48-e44db17962c4"}
+
+data: {"type":"TOOL_CALL_START","timestamp":1792221348592,"toolCallId":"pyd_ai_948535cd13544910bf213e201171cc91","toolCallName":"well_status","parentMessageId":"6e6c2c39-e632-41f0-9f48-e44db17962c4"}
+
+data: {"type":"TOOL_CALL_ARGS","timestamp":1792221348592,"toolCallId":"pyd_ai_948535cd13544910bf213e201171cc91","delta":"{\"scope\": {\"kind\": \"wells\", \"ids\": [\"WELL-0175\"]}}"}
+
+data: {"type":"TOOL_CALL_END","timestamp":1792221348592,"toolCallId":"pyd_ai_948535cd13544910bf213e201171cc91"}
+
+data: {"type":"TOOL_CALL_RESULT","timestamp":1792221348632,"messageId":"b8a699d9-4363-4e18-ae1e-97cae6cd581f","toolCallId":"pyd_ai_948535cd13544910bf213e201171cc91","content":"{\"handle\":\"r1\",\"shape\":\"entity\",\"columns\":[\"asset_id\",\"well_name\",\"well_type\",\"area\",\"inspection_id\",\"inspected_at\",\"inspector_user_id\",\"inspector\",\"method\",\"ambient_c\",\"wellhead_c\",\"wellhead_recorded_c\",\"delta_c\",\"threshold_c\",\"margin_c\",\"producing\",\"recorded_status\",\"recorded_status_stale\",\"inspection_note\",\"wellhead_overlay\",\"ambient_overlay\",\"delta_rule\",\"reason_summary\",\"explanation\"],\"preview\":[{\"asset_id\":\"WELL-0175\",\"well_name\":\"NE-08 Well 175\",\"well_type\":\"T200\",\"area\":\"Northeast Block 8\",\"inspection_id\":\"INS-0175-0204\",\"inspected_at\":\"2026-10-15 08:00:00Z\",\"inspector_user_id\":\"U-202\",\"inspector\":\"Jessica Reed\",\"method\":\"drone\",\"ambient_c\":23.9,\"wellhead_c\":24.3,\"wellhead_recorded_c\":24.3,\"delta_c\":0.4,\"threshold_c\":15.0,\"margin_c\":-14.6,\"producing\":false,\"recorded_status\":\"active\",\"recorded_status_stale\":true,\"inspection_note\":\"\",\"wellhead_overlay\":null,\"ambient_overlay\":null,\"delta_rule\":\"rule:OM-T200 §9.3\",\"reason_summary\":\"No recorded reason: no note or open repair covers this reading. Suggest a site check.\",\"explanation\":[]}],\"row_count\":1,\"sql\":\"SELECT s.asset_id, w.name AS well_name, s.well_type, a.name AS area, s.inspection_id, s.inspected_at,\\n  s.inspector_user_id, coalesce(u.name, s.inspector_user_id) AS inspector, s.method, s.ambient_eff AS ambient_c,\\n  s.wellhead_eff AS wellhead_c, s.wellhead_temp_c AS wellhead_recorded_c, round(s.delta_c, 1) AS delta_c,\\n  s.delta_min_c AS threshold_c, round(s.delta_c - s.delta_min_c, 1) AS margin_c, s.producing,\\n  w.recorded_status, (w.recorded_status = 'active') <> s.producing AS recorded_status_stale,\\n  s.notes AS inspection_note, s.wellhead_overlay, s.ambient_overlay, s.delta_rule\\nFROM (SELECT * FROM ins_eff('sample', TIMESTAMPTZ '2026-10-17 23:59:59+00') \\n      QUALIFY row_number() OVER (PARTITION BY asset_id ORDER BY inspected_at DESC) = 1) s\\nJOIN wells w ON w.dataset_id = 'sample' AND w.asset_id = s.asset_id\\nJOIN areas a ON a.dataset_id = 'sample' AND a.area_id = s.area_id\\nLEFT JOIN users u ON u.dataset_id = 'sample' AND u.user_id = s.inspector_user_id\\nWHERE s.asset_id IN ('WELL-0175') ORDER BY s.asset_id\",\"citations\":[{\"kind\":\"inspection\",\"id\":\"INS-0175-0204\",\"span\":null,\"label\":null}],\"dq_flags\":[{\"entity_id\":\"WELL-0175\",\"kind\":\"recorded_status_stale\",\"detail\":\"recorded=active, latest Δ=0.4°C\"}],\"applied_overlays\":[],\"notes\":[\"dataset=sample\",\"as-of 2026-10-17 23:59:59+00\",\"Status = effective reading of each well's latest inspection (overlays applied); producing ⇔ Δ ≥ threshold, where Δ = wellhead − ambient. recorded_status is a monthly snapshot and can be stale.\",\"scope: wells WELL-0175\"],\"conflicts\":[],\"related_handles\":[],\"rows_truncated\":false}","role":"tool"}
+
+data: {"type":"TEXT_MESSAGE_START","timestamp":1792221348634,"messageId":"c8ab2409-82ac-48b3-b81b-e2076989d412","role":"assistant"}
+
+data: {"type":"TEXT_MESSAGE_END","timestamp":1792221348634,"messageId":"c8ab2409-82ac-48b3-b81b-e2076989d412"}
+
+data: {"type":"TOOL_CALL_START","timestamp":1792221348634,"toolCallId":"pyd_ai_1b4a3e18c00f420ab33c86a15b35d173","toolCallName":"final_result","parentMessageId":"c8ab2409-82ac-48b3-b81b-e2076989d412"}
+
+data: {"type":"TOOL_CALL_ARGS","timestamp":1792221348634,"toolCallId":"pyd_ai_1b4a3e18c00f420ab33c86a15b35d173","delta":"{\"markdown\": \"WELL-0175 is not producing: wellhead is 0.4 \\u00b0C above air.\", \"claims\": [{\"text\": \"0.4 \\u00b0C\", \"value\": 0.4, \"handle\": \"r1\", \"column\": \"delta_c\", \"row_key\": {\"asset_id\": \"WELL-0175\"}}], \"assumptions\": [\"as-of 2026-10-17, dataset sample\"], \"citations\": [{\"kind\": \"inspection\", \"id\": \"INS-0175-0204\"}]}"}
+
+data: {"type":"TOOL_CALL_END","timestamp":1792221348635,"toolCallId":"pyd_ai_1b4a3e18c00f420ab33c86a15b35d173"}
+
+data: {"type":"TOOL_CALL_RESULT","timestamp":1792221348645,"messageId":"02c1c6db-8afe-463d-83dd-17102bf2fecf","toolCallId":"pyd_ai_1b4a3e18c00f420ab33c86a15b35d173","content":"Final result processed.","role":"tool"}
+
+data: {"type":"CUSTOM","name":"wellops.verification","value":{"ok":true,"retries":0,"gates":[{"name":"grounding","ok":true,"detail":null},{"name":"claims","ok":true,"detail":null},{"name":"disclosure","ok":true,"detail":null},{"name":"conflicts","ok":true,"detail":null},{"name":"visual_fit","ok":true,"detail":null},{"name":"assumptions","ok":true,"detail":null}]}}
+
+data: {"type":"CUSTOM","name":"wellops.usage","value":{"input_tokens":100,"output_tokens":54,"model":"function:fn:stream"}}
+
+data: {"type":"CUSTOM","name":"wellops.answer","value":{"markdown":"WELL-0175 is not producing: wellhead is 0.4 °C above air.","claims":[{"text":"0.4 °C","value":0.4,"handle":"r1","column":"delta_c","row_key":{"asset_id":"WELL-0175"}}],"visuals":[],"citations":[{"kind":"inspection","id":"INS-0175-0204","span":null,"label":null}],"conflicts":[],"applied_overlays":[],"assumptions":["as-of 2026-10-17, dataset sample"],"follow_ups":[]}}
+
+data: {"type":"RUN_FINISHED","timestamp":1792221348648,"threadId":"cap1","runId":"8cd39ce8-e7a0-4b49-a80e-92178ac11bf2","outcome":{"type":"success"}}
+

@@ -14,6 +14,8 @@ CANONICAL_TOOLS = {"well_status", "downtime", "spills", "obligations", "rca_cand
                    "inspection_series", "sql", "read_doc", "search_reports", "report_facts", "evidence_chain",
                    "resolve_entity", "recall_episodes", "assert_fact", "list_conflicts", "run_python", "render"}
 MEMORY_WRITE_TOOLS = {"assert_fact", "commit_assertion", "write_memory", "memory_write"}
+# progressive-disclosure reads of playbooks: allowed, not counted against the step budget
+META_TOOLS = {"list_skills", "load_skill", "read_skill_file", "search_docs", "undo_assertion"}
 
 
 @dataclass
@@ -238,6 +240,25 @@ def _args_blob(args) -> str:
     return args if isinstance(args, str) else json.dumps(args, default=str)
 
 
+def _json_obj(v):
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except ValueError:
+            return {}
+    return v if isinstance(v, dict) else {}
+
+
+def _memory_args(call: dict) -> dict:
+    """Flat assertion fields of a memory write. The backend tool takes {"assertion": {...}} (possibly a JSON string from
+    small models) and returns the validated AssertionOut, which is preferred when it carries the fields."""
+    res = _json_obj(call.get("result"))
+    if "kind" in res and "scope_level" in res:
+        return res
+    args = _json_obj(call.get("args"))
+    return _json_obj(args["assertion"]) if "assertion" in args else args
+
+
 def score_memory(answer, expect: dict, trace=None) -> Score:
     mw = expect.get("memory_write")
     if not mw:
@@ -245,12 +266,7 @@ def score_memory(answer, expect: dict, trace=None) -> Score:
     for call in trace or []:
         if call.get("name") not in MEMORY_WRITE_TOOLS:
             continue
-        args = call.get("args") or {}
-        if isinstance(args, str):
-            try:
-                args = json.loads(args)
-            except ValueError:
-                args = {}
+        args = _memory_args(call)
         kind_ok = args.get("kind") == mw["kind"]
         scope_ok = args.get("scope_level", args.get("scope")) == mw["scope"]
         key_ok = str(args.get("scope_key", args.get("key", ""))) == mw["key"]
@@ -274,12 +290,12 @@ DT_RE = re.compile(r"downtime_hours", re.I)
 def score_trajectory(answer, expect: dict, trace=None) -> Score:
     trace = trace or []
     forbidden = [c.get("name") for c in trace if DT_RE.search(_args_blob(c.get("args") or ""))]
-    steps = len(trace)
+    steps = sum(c.get("name") not in META_TOOLS for c in trace)
     budget = expect.get("max_steps", 12)
     comps = {"no_downtime_hours_col": 0.0 if forbidden else 1.0, "within_budget": 1.0 if steps <= budget else 0.0}
     if expect.get("tools_any"):
         comps["expected_tool_used"] = 1.0 if any(c.get("name") in expect["tools_any"] for c in trace) else 0.0
-    unknown = [c.get("name") for c in trace if c.get("name") not in CANONICAL_TOOLS | MEMORY_WRITE_TOOLS]
+    unknown = [c.get("name") for c in trace if c.get("name") not in CANONICAL_TOOLS | MEMORY_WRITE_TOOLS | META_TOOLS]
     v = sum(comps.values()) / len(comps)
     return Score("trajectory", v, "ok" if v >= 0.999 else f"{comps}", dict(comps, steps=steps, forbidden_calls=forbidden,
                                                                        non_canonical=unknown))

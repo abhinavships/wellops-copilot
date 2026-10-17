@@ -100,3 +100,21 @@ def test_cli_offline_writes_results(tmp_path, monkeypatch, capsys):
     run = next(tmp_path.iterdir())
     assert (run / "results.json").exists() and (run / "report.md").exists()
     assert json.loads((run / "results.json").read_text())["summary"]["pass_hat_k"] == 1.0
+
+
+def test_cli_interrupted_run_keeps_finished_cases(tmp_path, monkeypatch):
+    import evals.run as R
+    real, calls = R.run_case, []
+
+    def flaky(case, target, i):
+        calls.append(case["id"])
+        if len(calls) > 1:
+            raise KeyboardInterrupt("signal 15")  # e.g. the API restarted under us
+        return real(case, target, i)
+    monkeypatch.setattr(R, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(R, "run_case", flaky)
+    assert main(["--target", "fake", "--suite", "golden", "--cases", "Q01,Q06,Q13", "--no-meta"]) == 130
+    run = next(tmp_path.iterdir())
+    assert len((run / "partial.jsonl").read_text().splitlines()) == 1
+    assert json.loads((run / "results.json").read_text())["summary"]["interrupted"] == "signal 15"
+    assert "PARTIAL RUN" in (run / "report.md").read_text()

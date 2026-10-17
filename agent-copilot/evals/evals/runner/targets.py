@@ -156,15 +156,24 @@ class ApiTarget:
                             events.append(json.loads(payload))
                         except ValueError:
                             pass
-        return parse_agui(events)
+        answer, trace = parse_agui(events)
+        err = answer.get("_meta", {}).get("run_error")
+        if err and answer["_meta"].get("no_answer_event"):
+            raise RuntimeError(f"RUN_ERROR: {err}")
+        return answer, trace
+
+
+OUTPUT_TOOLS = {"final_result"}  # pydantic-ai output tool: the answer itself, counted as attempts, not a trajectory step
 
 
 def parse_agui(events: list[dict]) -> tuple[dict, list[dict]]:
     """CUSTOM 'wellops.answer' -> AnswerSpec; TOOL_CALL_* -> trace. Falls back to streamed text if no answer event."""
-    answer, text, calls, order, extras = None, [], {}, [], {}
+    answer, text, calls, order, extras, run_error = None, [], {}, [], {}, None
     for e in events:
         t = e.get("type")
-        if t == "CUSTOM":
+        if t == "RUN_ERROR":
+            run_error = f"{e.get('code') or ''} {e.get('message') or ''}".strip()
+        elif t == "CUSTOM":
             if e.get("name") == "wellops.answer":
                 v = e.get("value")
                 answer = json.loads(v) if isinstance(v, str) else v
@@ -186,19 +195,26 @@ def parse_agui(events: list[dict]) -> tuple[dict, list[dict]]:
                     c["result"] = e.get("content")
         elif t == "TEXT_MESSAGE_CONTENT":
             text.append(e.get("delta", ""))
-    trace = []
+    trace, output_attempts = [], 0
     for cid in order:
         c = calls[cid]
         try:
             c["args"] = json.loads(c["args"]) if c["args"] else {}
         except ValueError:
             pass
-        trace.append(c)
+        if c["name"] in OUTPUT_TOOLS:
+            output_attempts += 1
+        else:
+            trace.append(c)
     if answer is None:
         answer = dict(markdown="".join(text))
         answer["_meta"] = dict(no_answer_event=True)
+    meta = answer.setdefault("_meta", {})
+    meta["output_attempts"] = output_attempts
     if extras:
-        answer.setdefault("_meta", {})["events"] = extras
+        meta["events"] = extras
+    if run_error:
+        meta["run_error"] = run_error
     return answer, trace
 
 

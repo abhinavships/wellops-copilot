@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 import time
 from collections import defaultdict
@@ -43,7 +44,10 @@ def report_md(run_id: str, args, summ: dict, audit: dict | None, meta: dict | No
          + (f" opik={opik_url}" if opik_url else ""), "",
          f"- mean aggregate (0.5 facts + 0.25 evidence + 0.25 visual): **{summ['mean_score']:.3f}**",
          f"- pass^{args.k} (all runs fully pass): **{summ['pass_hat_k']:.3f}**, pass@{args.k}: {summ['pass_at_k']:.3f}",
-         f"- cases with a cross-principal leak (hard fail): **{summ['leaks']}**", "", "## Per-scorer mean (where applicable)", ""]
+         f"- cases with a cross-principal leak (hard fail): **{summ['leaks']}**", ""]
+    if summ.get("interrupted"):
+        L += [f"> **PARTIAL RUN** (interrupted: {summ['interrupted']}): only finished cases are scored.", ""]
+    L += ["## Per-scorer mean (where applicable)", ""]
     L += [f"- {n}: {v:.3f}" for n, v in sorted(summ["per_scorer_mean"].items())]
     L += ["", "## Cases", "", "| case | title | mean | pass^k | leak |", "|---|---|---|---|---|"]
     for cid, c in sorted(summ["cases"].items()):
@@ -97,18 +101,34 @@ def main(argv=None) -> int:
                 experiment_name=f"{a.target}-{a.suite}-{run_id}", project=a.project or opik_sink.PROJECT,
                 config=dict(target=a.target, suite=a.suite, k=a.k, run_id=run_id))
             opik_url = getattr(ev, "experiment_url", None) or getattr(ev, "url", None)
+    interrupted = None
     if not results:
-        for i in range(a.k):
-            for c in cases:
-                results.append(run_case(c, target, i))
+        # each finished case is appended at once, so a killed run (server restart, SIGTERM, Ctrl-C) keeps what it did
+        signal.signal(signal.SIGTERM, _raise_interrupt)
+        try:
+            with (out / "partial.jsonl").open("a") as pf:
+                for i in range(a.k):
+                    for c in cases:
+                        print(f"[run {i + 1}/{a.k}] {c['id']} ...", file=sys.stderr, flush=True)
+                        results.append(run_case(c, target, i))
+                        pf.write(json.dumps(results[-1], default=str) + "\n")
+                        pf.flush()
+        except KeyboardInterrupt as e:
+            interrupted = str(e) or "KeyboardInterrupt"
+            print(f"[interrupted: {interrupted}] writing a partial report for {len(results)} case run(s)", file=sys.stderr)
+        if not results:
+            print("no case finished; nothing to report", file=sys.stderr)
+            return 130
 
     summ = summarize(results, a.k)
+    if interrupted:
+        summ["interrupted"] = interrupted
     audit = meta = None
     if a.suite in ("golden", "all"):
         from evals.truth.audit import audit as run_audit
         audit = run_audit([c for c in cases if c["suite"] == "golden"])
         (out / "key_audit.json").write_text(json.dumps(audit, indent=1, default=str))
-    if a.target == "fake" and not a.no_meta:
+    if a.target == "fake" and not a.no_meta and not interrupted:
         from evals.runner.faults import meta_eval
         meta = meta_eval(cases, target)
         (out / "meta_eval.json").write_text(json.dumps(meta, indent=1))
@@ -117,7 +137,11 @@ def main(argv=None) -> int:
     (out / "report.md").write_text(md)
     print(md)
     print(f"results: {out}")
-    return 0
+    return 130 if interrupted else 0
+
+
+def _raise_interrupt(signum, frame):
+    raise KeyboardInterrupt(f"signal {signum}")
 
 
 if __name__ == "__main__":
