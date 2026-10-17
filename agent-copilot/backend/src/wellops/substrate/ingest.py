@@ -156,6 +156,8 @@ def ingest(data_dir: Path, ds: str, con: duckdb.DuckDBPyConnection) -> dict:
         """SELECT inspection_id, count(DISTINCT asset_id), string_agg(DISTINCT asset_id, ', ') FROM inspections
            WHERE dataset_id=? GROUP BY inspection_id HAVING count(DISTINCT asset_id) > 1""", [ds]).fetchall()]
     _many(con, "INSERT INTO dq_flags VALUES (?,?,?,?)", late_flags)
+    from wellops import rag
+    rag.reindex(con, ds, embed=False)  # knowledge index (BM25); main() also fills the dense vectors
     return {t: con.execute(f"SELECT count(*) FROM {t} WHERE dataset_id=?", [ds]).fetchone()[0] for t in RAW_TABLES}
 
 
@@ -209,7 +211,8 @@ def main() -> None:
     ds = sys.argv[2] if len(sys.argv) > 2 else settings.dataset_id
     con = connect()
     counts = ingest(data, ds, con)
-    print(json.dumps({"dataset_id": ds, **counts}, indent=2))
+    from wellops.rag.index import embed_missing
+    print(json.dumps({"dataset_id": ds, **counts, "kb_vectors": embed_missing(con, ds)}, indent=2))
 
 
 if __name__ == "__main__":

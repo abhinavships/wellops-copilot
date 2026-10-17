@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     llm_provider: str = "gemini"  # Google OpenAI-compatible endpoint
     llm_model: str = ""  # default per provider below
+    rag_embed: bool = True  # dense layer of search_knowledge (Gemini embeddings); False = BM25 only
+    rag_embed_model: str = "gemini-embedding-001"
+    rag_embed_dims: int = 768
+    rag_embed_max: int = 4000  # new chunks embedded per reindex (the rest wait for the next one)
     cache_enabled: bool = True  # SQLite answer cache (off for evals: every case must run live)
     self_url: str = "http://127.0.0.1:8000"  # where this API (and its /mcp) is reachable from local agents
     harness: str = "native"  # native (Gemini agent over the WellOps tool registry) | pydantic (legacy test agent)

@@ -45,6 +45,7 @@ Rules:
 - Status statements about a well ("it's running", "shut in since 14 Oct") also go to propose_correction as
   {{"producing": ...}}; planned work, shared facts and rules go to remember_correction.
 - If notes and sensor data disagree, say so plainly and name both sources.
+- For what a manual, SOP, repair report or note says, call search_knowledge and quote the passage with its source.
 - For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id, and
   name the repair or note behind the reason (MNT-/CTX- id).
 - Mention the key record id (e.g. INS-0001-0203) once, inline.
