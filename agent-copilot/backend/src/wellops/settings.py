@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     clock_today: date = date(2026, 10, 17)
     db_path: Path = ROOT / "backend" / "wellops.duckdb"
 
-    model_orchestrator: str = "openrouter:google/gemma-4-31b-it:free"
-    model_worker: str = "openrouter:google/gemma-4-26b-a4b-it:free"
+    model_orchestrator: str = "openrouter:nvidia/nemotron-3-super-120b-a12b:free"
+    model_worker: str = "openrouter:poolside/laguna-s-2.1:free"
 
 
 settings = Settings()
