@@ -27,7 +27,7 @@ ALLOWED_VISUALS = {
     "matrix": {"heatmap", "table", "none"},
     "obligation_set": {"obligation_timeline", "table", "none"},
     "diff": {"correction_diff", "table", "none"},
-    "text": {"none", "table", "evidence_chain", "image", "ingest_report", "dispute"},
+    "text": {"none", "table", "evidence_chain", "image", "ingest_report", "dispute", "sources"},
 }
 
 

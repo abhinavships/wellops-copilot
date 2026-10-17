@@ -5,11 +5,17 @@ import { Badge, stateTone } from "@/components/ui";
 import { asStrArr, fmtVal, num, titleCase } from "@/lib/format";
 
 const isStatusCol = (c: string) => /status|state|result|severity/.test(c);
+// internal plumbing never shown as a column unless the agent asked for it by name
+const HIDDEN = new Set(["span", "same_text_count", "rank", "score", "evidence_ids", "threshold_source", "sql", "explanation",
+  "lat", "lon", "obligation_id", "trigger_ref", "label", "notes_raw"]);
+const empty = (v: unknown) => v === null || v === undefined || v === "" || v === "–";
+const MAX_COLS = 8;
 
 export function DataTable({ visual, data, rows }: VisualProps) {
   const cols = useMemo(() => {
     const e = asStrArr(visual.encodings?.columns);
-    return (e.length ? e : data?.columns ?? []).filter((c) => rows.some((r) => c in r) || !data);
+    if (e.length) return e.filter((c) => rows.some((r) => c in r) || !data);
+    return (data?.columns ?? []).filter((c) => !HIDDEN.has(c) && rows.some((r) => !empty(r[c]))).slice(0, MAX_COLS);
   }, [visual, data, rows]);
   const [sort, setSort] = useState<{ col: string; dir: 1 | -1 } | null>(
     typeof visual.encodings?.sort === "string" && cols.includes(visual.encodings.sort as string)
@@ -25,7 +31,7 @@ export function DataTable({ visual, data, rows }: VisualProps) {
 
   return (
     <div className="-mx-3 overflow-x-auto px-3">
-      <table className="w-full min-w-[480px] border-collapse text-left text-sm">
+      <table className="w-full border-collapse text-left text-sm">
         <thead>
           <tr>
             {cols.map((c) => (
@@ -45,14 +51,16 @@ export function DataTable({ visual, data, rows }: VisualProps) {
                 const v = r[c];
                 const id = String(r[cols[0]] ?? "");
                 return (
-                  <td key={c} className="px-2 py-2">
+                  <td key={c} className={`px-2 py-2 ${typeof v === "string" && v.length > 40 ? "min-w-[16rem] max-w-[28rem]" : "whitespace-nowrap"}`}>
                     {isStatusCol(c) && typeof v === "string" ? <Badge tone={stateTone(v)}>{v}</Badge>
                       : ci === 0 ? (
                         <span className="inline-flex flex-wrap items-center gap-1.5 font-mono text-[13px] font-medium">
                           {fmtVal(v)}
                           {flagged.has(id) && <span title="Data-quality flag: recorded status out of date" className="rounded bg-warn/15 px-1 text-[10px] font-sans font-semibold text-warn">⚠ DQ</span>}
                         </span>
-                      ) : <span className={typeof v === "number" ? "tabular-nums" : ""}>{fmtVal(v)}</span>}
+                      ) : typeof v === "string" && v.length > 40
+                        ? <span className="line-clamp-2" title={v}>{v}</span>
+                        : <span className={typeof v === "number" ? "tabular-nums" : ""}>{fmtVal(v)}</span>}
                   </td>
                 );
               })}

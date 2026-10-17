@@ -66,7 +66,7 @@ export type VisualType =
   | "status_card" | "table" | "line" | "bar" | "map" | "heatmap" | "obligation_timeline"
   | "correction_diff" | "conflict_card" | "evidence_chain" | "none"
   // Generative UI extras (frontend catalog; data inline in encodings or bound by handle):
-  | "kpi" | "gauge" | "progress" | "timeline" | "list" | "compare" | "image" | "ingest_report" | "callout" | "tabs" | "dispute";
+  | "kpi" | "gauge" | "progress" | "timeline" | "list" | "compare" | "image" | "ingest_report" | "callout" | "tabs" | "dispute" | "sources";
 
 /** POST /api/ingest response (multipart `file`). */
 export interface IngestReport {

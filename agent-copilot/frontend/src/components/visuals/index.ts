@@ -11,6 +11,7 @@ import { CorrectionDiff } from "./CorrectionDiff";
 import { ConflictCard } from "./ConflictCard";
 import { EvidenceChain } from "./EvidenceChain";
 import { DisputeCard } from "./DisputeCard";
+import { SourcesList } from "./SourcesList";
 import { Callout, Compare, Gauge, ImageView, IngestCard, Kpi, ListBoard, Progress, Tabs, Timeline } from "./Extra";
 
 export interface VisualProps {
@@ -22,7 +23,7 @@ export const VISUALS: Partial<Record<VisualType, React.ComponentType<VisualProps
   status_card: StatusCard, table: DataTable, line: LineChart, bar: BarChart, map: MapView, heatmap: Heatmap,
   obligation_timeline: ObligationTimeline, correction_diff: CorrectionDiff, conflict_card: ConflictCard, evidence_chain: EvidenceChain,
   kpi: Kpi, gauge: Gauge, progress: Progress, timeline: Timeline, list: ListBoard, compare: Compare, image: ImageView,
-  ingest_report: IngestCard, callout: Callout, tabs: Tabs, dispute: DisputeCard,
+  ingest_report: IngestCard, callout: Callout, tabs: Tabs, dispute: DisputeCard, sources: SourcesList,
 };
 
 // A correction (correction_diff) or a claim that conflicts with the data (conflict_card) produced by the feedback

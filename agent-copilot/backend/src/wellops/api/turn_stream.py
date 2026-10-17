@@ -65,8 +65,11 @@ def _focus(deps: RunDeps, visuals: list[Visual]) -> list[Visual]:
         return disputes[-1:]
     seen, out = set(), []
     for v in visuals:
-        if v.type in ("dispute", "none") or (v.handle and not store().get(deps.chat_id, v.handle)):
+        st = store().get(deps.chat_id, v.handle) if v.handle else None
+        if v.type in ("dispute", "none") or (v.handle and not st):
             continue
+        if st and "snippet" in st.result.columns:  # retrieved passages read as source cards, never a wide table
+            v = v.model_copy(update={"type": "sources", "title": v.title or "Sources"})
         k = (v.type, v.handle)
         if k in seen or any(o.type == v.type for o in out):
             continue
@@ -77,7 +80,7 @@ def _focus(deps: RunDeps, visuals: list[Visual]) -> list[Visual]:
 
 ID_COLS = ("asset_id", "inspection_id", "maintenance_id", "event_id", "note_id", "ref", "obligation_id")
 DATE_COLS = ("inspected_at", "date", "started_at", "completed_at", "due_at", "trigger_at", "created_at", "month")
-SKIP_COLS = {"lat", "lon", "evidence_ids", "threshold_source", "sql", "explanation", "label", "obligation_id", "trigger_ref"}
+SKIP_COLS = {"span", "same_text_count", "rank", "score", "snippet", "lat", "lon", "evidence_ids", "threshold_source", "sql", "explanation", "label", "obligation_id", "trigger_ref"}
 
 
 def _cell(v) -> str:
@@ -94,6 +97,9 @@ def _appendix(deps: RunDeps, visuals: list[Visual]) -> tuple[str, list]:
         st = store().get(deps.chat_id, v.handle) if v.handle else None
         if not st or not st.rows:
             continue
+        if "snippet" in st.result.columns:  # passages: list the sources, not a table of long text
+            lines = [f"- {r.get('title') or r.get('id')} ({r.get('id')}): {str(r.get('snippet') or '')[:160]}" for r in st.rows[:6]]
+            return "\n\n**Sources**\n\n" + "\n".join(lines), list(st.result.citations)
         cols = [c for c in st.result.columns if c not in SKIP_COLS and any(r.get(c) not in (None, "") for r in st.rows[:50])]
         cols = sorted(cols, key=lambda c: (c not in ID_COLS, c not in DATE_COLS))[:8]
         rows = st.rows[:40]

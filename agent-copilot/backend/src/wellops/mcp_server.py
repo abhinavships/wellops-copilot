@@ -230,7 +230,7 @@ def generate_image(ctx: Context, prompt: str, width: int = 768, height: int = 51
 
 
 VisualT = Literal["status_card", "table", "line", "bar", "map", "heatmap", "obligation_timeline", "evidence_chain",
-                  "conflict_card", "correction_diff", "dispute", "kpi", "gauge", "timeline", "image", "ingest_report", "none"]
+                  "conflict_card", "correction_diff", "dispute", "sources", "kpi", "gauge", "timeline", "image", "ingest_report", "none"]
 
 
 @mcp.tool()

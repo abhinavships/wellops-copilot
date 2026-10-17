@@ -73,7 +73,7 @@ class Conflict(BaseModel):
 
 VisualType = Literal["status_card", "table", "line", "bar", "map", "heatmap", "obligation_timeline",
                      "correction_diff", "conflict_card", "evidence_chain", "kpi", "gauge", "timeline", "image", "dispute",
-                     "ingest_report", "none"]
+                     "ingest_report", "sources", "none"]
 
 
 class Visual(BaseModel):
