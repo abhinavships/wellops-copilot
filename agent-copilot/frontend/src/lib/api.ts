@@ -92,3 +92,12 @@ export async function ingestFile(file: File, c: Ctx): Promise<IngestReport> {
   if (!r.ok) throw new Error(`Upload failed: HTTP ${r.status}${r.status === 404 ? " (is /api/ingest deployed?)" : ""}`);
   return (await r.json()) as IngestReport;
 }
+
+/** Human-in-the-loop decision on a proof card (no model call). */
+export async function resolveDispute(id: string, action: "correct" | "keep", c: Ctx, value?: unknown): Promise<Record<string, unknown>> {
+  if (MOCK) return { dispute_id: id, status: action === "keep" ? "kept" : "corrected", assertion_id: "A-mock" };
+  const r = await fetch(`${API_BASE}/api/disputes/${encodeURIComponent(id)}/resolve`, {
+    method: "POST", headers: ctxHeaders(c), body: JSON.stringify({ action, value }) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}

@@ -10,6 +10,7 @@ import { EvidenceDrawer } from "@/components/EvidenceDrawer";
 import { Sidebar } from "@/components/Sidebar";
 import { UiContext, type EvidenceTarget } from "@/components/ui";
 import { XrayPanel } from "@/components/XrayPanel";
+import { RunTrace } from "@/components/RunTrace";
 import { CanvasModal } from "@/components/Board";
 import { viewsFor } from "@/components/visuals/Interactive";
 import { chartIntent, setCanvasOpen, setViewOverride, useBoard, viewKey } from "@/lib/board";
@@ -29,7 +30,7 @@ export function Shell() {
   const [today, setToday] = useState(DEFAULT_TODAY);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [chatId, setChatId] = useState(() => newChatId());
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
   const [leftOpen, setLeftOpen] = useState(false);
   const [xrayOpen, setXrayOpen] = useState(false);
   const [xrayDesktop, setXrayDesktop] = useState(false); // X-ray is opt-in, from the menu
@@ -53,7 +54,7 @@ export function Shell() {
     const u = ls.get("wellops.user"); if (u) setUserId(u);
   }, []);
   useEffect(() => {
-    if (theme === "system") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
     ls.set("wellops.theme", theme);
   }, [theme]);
   useEffect(() => { fetchUsers().then(setUsers).catch((e: Error) => setLoadErr(`Could not load users: ${e.message}`)); }, []);
@@ -147,11 +148,11 @@ export function Shell() {
     <form onSubmit={(e) => { e.preventDefault(); submit(input); }}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}
-      className={`rounded-[28px] border bg-panel p-2 shadow-[0_2px_6px_rgb(0_0_0/.04),0_12px_40px_-16px_rgb(0_0_0/.18)] transition ${dragOver ? "border-accent ring-4 ring-accent/15" : "border-line"}`}>
+      className={`rounded-[30px] border bg-panel p-2 shadow-[0_1px_0_rgb(var(--line)),0_24px_48px_-28px_rgb(0_0_0/.45)] transition ${dragOver ? "border-fg ring-4 ring-hl/60" : "border-line"}`}>
       <label htmlFor="msg" className="sr-only">Message</label>
-      <textarea id="msg" rows={2} value={input} onChange={(e) => setInput(e.target.value)} placeholder={dragOver ? "Drop to upload…" : "Ask anything about your wells…"}
+      <textarea id="msg" rows={2} value={input} onChange={(e) => setInput(e.target.value)} placeholder={dragOver ? "Drop a CSV, PDF or photo to ingest…" : "Ask about a well, an area, spills, downtime…"}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input); } }}
-        className="max-h-48 min-h-14 w-full resize-none bg-transparent px-3 pt-2 text-[15px] outline-none placeholder:text-muted" />
+        className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3 text-[16px] outline-none placeholder:text-muted/80" />
       <div className="flex items-center gap-1 px-1">
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = ""; }} />
         <button type="button" className={iconBtn} onClick={() => fileRef.current?.click()} aria-label="Attach a file" title="Attach a file (or drop it here)">
@@ -168,8 +169,8 @@ export function Shell() {
 
   return (
     <UiContext.Provider value={ui}>
-      <div className="flex h-dvh overflow-hidden bg-bg">
-        <aside className="hidden w-64 shrink-0 border-r border-line/60 bg-panel/40 md:block" aria-label="Sidebar">{sidebar}</aside>
+      <div className="paper flex h-dvh overflow-hidden">
+        <aside className="hidden w-64 shrink-0 border-r border-line bg-bg/70 backdrop-blur md:block" aria-label="Sidebar">{sidebar}</aside>
         {leftOpen && (
           <div className="fixed inset-0 z-30 md:hidden">
             <button type="button" aria-label="Close menu" className="absolute inset-0 bg-black/40" onClick={() => setLeftOpen(false)} />
@@ -178,9 +179,10 @@ export function Shell() {
         )}
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center gap-2 px-4 py-3">
+          <header className="flex items-center gap-3 border-b border-line/70 bg-bg/60 px-5 py-3 backdrop-blur">
             <button type="button" className={`${iconBtn} md:hidden`} onClick={() => setLeftOpen(true)} aria-label="Open menu">☰</button>
-            <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-muted">{chats.find((c) => c.chat_id === chatId)?.title || "New chat"}</h1>
+            <h1 className="label min-w-0 flex-1 truncate"><span className="text-fg">WellOps</span> · case file <span suppressHydrationWarning>{chatId.replace(/^chat-/, "").slice(0, 6).toUpperCase()}</span><span className="hidden sm:inline"> · {chats.find((c) => c.chat_id === chatId)?.title || "new inquiry"}</span></h1>
+            <span className="label hidden md:inline">as of {today}</span>
             {boardCount > 0 && <button type="button" onClick={() => setCanvasOpen(true)} className="rounded-full px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg">Canvas · {boardCount}</button>}
             <div className="relative">
               <button type="button" className={iconBtn} aria-label="More" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)} data-testid="menu">
@@ -204,24 +206,30 @@ export function Shell() {
             <div className="mx-auto w-full max-w-[720px] space-y-10 px-4 pb-10 pt-4">
               {loadErr && <p role="alert" className="rounded-2xl border border-bad/30 bg-bad/10 p-3 text-sm text-bad">{loadErr}. Is the backend running at the configured API base?</p>}
               {turns.length === 0 && (
-                <div className="flex min-h-[60vh] flex-col justify-center">
-                  <h2 className="text-center text-3xl font-semibold tracking-tight">What do you want to know?</h2>
-                  <p className="mt-2 text-center text-sm text-muted">Every figure traces back to a record.</p>
+                <div className="flex min-h-[68vh] flex-col justify-center">
+                  <div className="label flex items-center justify-between border-b border-line pb-2"><span><span className="text-warn">Wellops</span> · asset intelligence</span><span>Fig. 0 — every figure traces to a record</span></div>
+                  <div className="mx-auto mt-10 inline-flex items-center gap-2 rounded-full border border-line bg-panel px-1.5 py-1 text-[13px]">
+                    <span className="rounded-full bg-fg px-2 py-0.5 font-mono text-[10px] tracking-widest text-bg">NEW</span>
+                    <span>Hermes agent · proof before any correction</span>
+                  </div>
+                  <h2 className="display mt-6 text-center text-5xl font-bold leading-[1.02] sm:text-6xl">Ask your <span className="hl">wells</span><br />anything.</h2>
+                  <p className="mx-auto mt-4 max-w-md text-center text-[15px] text-muted">Status, downtime, spills, duties. Answers come back as a figure you can touch, with the records behind every number.</p>
                   <div className="mt-8">{composer}</div>
-                  <div className="mt-4 flex flex-wrap justify-center gap-2">
-                    {SCENARIOS.map((s) => (
-                      <button key={s.id} type="button" onClick={() => submit(s.question, s.id)} data-testid={`suggest-${s.id}`} title={s.question}
-                        className="rounded-full border border-line px-3 py-1.5 text-xs text-muted transition hover:border-fg/30 hover:text-fg">{s.label}</button>
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">
+                    {SCENARIOS.slice(0, 4).map((s) => (
+                      <button key={s.id} type="button" onClick={() => submit(s.question, MOCK ? s.id : undefined)} data-testid={`suggest-${s.id}`} title={s.question}
+                        className="rounded-full border border-line bg-panel px-3.5 py-1.5 text-[13px] transition hover:border-fg">{s.label}</button>
                     ))}
                   </div>
                 </div>
               )}
               {turns.map((t) => (
                 <article key={t.id} data-testid="turn" data-status={t.status} className="turn-in space-y-4" onClick={() => setSelTurn(t.id)}>
-                  <div className="flex justify-end"><p className="max-w-[80%] rounded-3xl bg-raised px-4 py-2.5 text-[15px]">{t.userText}</p></div>
-                  {t.status === "error" && <p role="alert" className="rounded-2xl border border-bad/30 bg-bad/10 p-3 text-sm text-bad">The run failed: {t.error}</p>}
+                  <div className="flex justify-end"><p className="max-w-[80%] rounded-[22px] rounded-br-md bg-fg px-4 py-2.5 text-[15px] text-bg">{t.userText}</p></div>
+                  <RunTrace turn={t} index={1} />
+                  {t.status === "error" && <p role="alert" className="rounded-xl border border-bad/40 bg-panel p-3 font-mono text-[13px] text-bad">× run failed — {t.error}</p>}
                   {(t.text || t.answer) ? <AnswerView answer={t.answer} text={t.text} streaming={t.status === "running" && !t.answer} turn={t} />
-                    : t.status === "running" && <p className="text-sm text-muted">{t.tools.length ? `Working · ${t.tools[t.tools.length - 1].name.replace(/_/g, " ")}` : "Thinking"}<span className="dots"><span>.</span><span>.</span><span>.</span></span></p>}
+                    : null}
                   {t.answer && t.status === "done" && voiceOn && <SpeakButton markdown={t.answer.markdown} />}
                 </article>
               ))}

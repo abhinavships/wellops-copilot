@@ -70,6 +70,24 @@ async def _run_hermes(req: dict) -> AsyncIterator[dict]:
     await proc.wait()
 
 
+def _focus(deps: RunDeps, visuals: list[Visual]) -> list[Visual]:
+    """Only what was asked: a proof card stands alone; otherwise one primary figure (plus a second only if it is a
+    different kind of view). Visuals pointing at handles that don't exist are dropped."""
+    disputes = [v for v in visuals if v.type == "dispute" and v.encodings.get("dispute_id")]
+    if disputes:
+        return disputes[-1:]
+    seen, out = set(), []
+    for v in visuals:
+        if v.type in ("dispute", "none") or (v.handle and not store().get(deps.chat_id, v.handle)):
+            continue
+        k = (v.type, v.handle)
+        if k in seen or any(o.type == v.type for o in out):
+            continue
+        seen.add(k)
+        out.append(v)
+    return out[:2]
+
+
 def _compose(deps: RunDeps, text: str) -> AnswerSpec:
     visuals = mcp_server.UI_QUEUE.get(deps.chat_id, [])
     results = mcp_server.TOOL_LOG.get(deps.chat_id, [])
@@ -79,6 +97,7 @@ def _compose(deps: RunDeps, text: str) -> AnswerSpec:
             if r.shape in DEFAULT_VISUAL and r.row_count:
                 visuals = [Visual(type=DEFAULT_VISUAL[r.shape], handle=r.handle)]
                 break
+    visuals = _focus(deps, visuals)
     cites = [c for r in results for c in r.citations][:12]
     return AnswerSpec(markdown=text.strip(), visuals=visuals, citations=cites,
                       assumptions=list(dict.fromkeys(n for r in results for n in r.notes))[:4])
@@ -89,6 +108,7 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
     system = SYSTEM.format(today=deps.today, principal=deps.principal)
     headers = {"X-User-Id": deps.principal, "X-Chat-Id": deps.chat_id, "X-Clock-Today": str(deps.today)}
     ask, attempts, spec, final_msgs = message, [], None, history
+    tool_texts: list[str] = []  # every raw tool result this turn, so evidence numbers count as grounded
     mcp_server.UI_QUEUE.pop(deps.chat_id, None)
     mcp_server.TOOL_LOG.pop(deps.chat_id, None)
     for attempt in range(MAX_RETRIES + 1):
@@ -105,6 +125,7 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
                 yield ({"type": "TOOL_CALL_ARGS", "toolCallId": ev["id"], "delta": json.dumps(ev.get("args"), default=str)})
                 yield ({"type": "TOOL_CALL_END", "toolCallId": ev["id"]})
             elif k == "tool_end":
+                tool_texts.append(str(ev.get("result", "")))
                 yield ({"type": "TOOL_CALL_RESULT", "toolCallId": ev["id"], "messageId": mid, "content": ev.get("result", "")[:2000]})
             elif k == "delta":
                 text += ev["text"]
@@ -124,7 +145,7 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
         spec = _compose(deps, text)
         results = mcp_server.TOOL_LOG.get(deps.chat_id, [])
         raw = " ".join(r.model_dump_json() for r in results) + " " + " ".join(
-            json.dumps(st.rows, default=str) for r in results if (st := store().get(deps.chat_id, r.handle)))
+            json.dumps(st.rows, default=str) for r in results if (st := store().get(deps.chat_id, r.handle))) + " " + " ".join(tool_texts)
         v = verify(deps, spec, results, raw_tools=raw, user_text=message, attempt=attempt)
         if not results and not text.rstrip().endswith("?"):  # an answer with no tool data is a guess (or a refusal)
             from wellops.verify.gates import GateResult

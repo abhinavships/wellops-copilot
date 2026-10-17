@@ -13,7 +13,10 @@ export interface Turn {
   conflicts: Conflict[]; answer?: AnswerSpec; verification?: VerificationEvent; usage?: UsageEvent;
   status: "running" | "done" | "error"; error?: string; startedAt: number; endedAt?: number;
   stateDeltas: unknown[][];
+  trace?: RunTrace; cache?: { hit: boolean; ms: number; saved_ms?: number };
 }
+export interface TraceStep { name: string; ms: number; ok: boolean; detail?: string }
+export interface RunTrace { steps: TraceStep[]; total_ms: number }
 
 const storeKey = (chatId: string) => `wellops.turns.${chatId}`;
 export function loadTurns(chatId: string): Turn[] {
@@ -46,6 +49,8 @@ export function reduceEvent(t: Turn, ev: AguiEvent, now = Date.now()): Turn {
         case "wellops.capability": return { ...t, capabilities: [...t.capabilities, ev.value as CapabilityEvent] };
         case "wellops.conflict": return { ...t, conflicts: [...t.conflicts, ev.value as Conflict] };
         case "wellops.usage": return { ...t, usage: { ...t.usage, ...(ev.value as UsageEvent) } };
+        case "wellops.trace": return { ...t, trace: ev.value as RunTrace };
+        case "wellops.cache": return { ...t, cache: ev.value as Turn["cache"] };
         default: return t;
       }
     }

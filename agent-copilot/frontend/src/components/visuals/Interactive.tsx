@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Bar, BarChart, Brush, CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, Brush, CartesianGrid, Cell, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { VisualProps } from ".";
 import { VISUALS } from ".";
 import type { CitationKind, HandleData, Visual } from "@/contracts";
@@ -8,6 +8,7 @@ import { useUi, type EvidenceTarget } from "@/components/ui";
 import { asStrArr, fmtVal, num, titleCase } from "@/lib/format";
 
 const COLORS = ["rgb(var(--c1))", "rgb(var(--c3))", "rgb(var(--c4))", "rgb(var(--c2))"];
+const MONO = "var(--font-mono)";
 const ID_COLS: [string, CitationKind][] = [["inspection_id", "inspection"], ["maintenance_id", "maintenance"], ["event_id", "reg_event"], ["note_id", "note"]];
 
 /** Chart types a card may switch between, from the visual and the result shape. */
@@ -50,17 +51,19 @@ export function InteractiveChart({ visual, data, rows, view }: VisualProps & { v
     return [...rows].sort((a, b) => ((num(a[ys[0]]) ?? 0) - (num(b[ys[0]]) ?? 0)) * sort);
   }, [rows, view, sort, ys]);
   const bands = (visual.annotations ?? []).filter((a) => a.type === "band");
+  const peak = Math.max(...rows.map((r) => num(r[ys[0]]) ?? -Infinity)); // the answer's key item gets the highlighter
   const click = (row: unknown, col?: string) => { if (data && row && typeof row === "object") openEvidence(rowEvidence(row as Record<string, unknown>, data, col)); };
   const legend = (
     <Legend onClick={(o) => { const k = String(o.dataKey); setHidden((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; }); }}
       formatter={(v: string) => <span style={{ cursor: "pointer", opacity: hidden.has(v) ? 0.4 : 1 }}>{titleCase(v)}</span>} wrapperStyle={{ fontSize: 12 }} />
   );
   const tooltip = <Tooltip cursor={{ fill: "rgb(var(--muted) / .15)", stroke: "rgb(var(--muted))" }} formatter={(v, n) => [fmtVal(v as unknown), titleCase(String(n))]} labelFormatter={(l) => String(l)}
-    contentStyle={{ background: "rgb(var(--panel))", border: "1px solid rgb(var(--line))", borderRadius: 8, fontSize: 12 }} />;
+    contentStyle={{ background: "rgb(var(--fg))", color: "rgb(var(--bg))", border: "none", borderRadius: 10, fontSize: 12, fontFamily: MONO }}
+    itemStyle={{ color: "rgb(var(--bg))" }} labelStyle={{ color: "rgb(var(--bg))", fontWeight: 600 }} />;
   const axes = (<>
-    <CartesianGrid stroke="rgb(var(--line))" strokeDasharray="3 3" />
-    <XAxis dataKey={xc} tick={{ fontSize: 11, fill: "rgb(var(--muted))" }} />
-    <YAxis tick={{ fontSize: 11, fill: "rgb(var(--muted))" }} width={40} />
+    <CartesianGrid stroke="rgb(var(--line))" strokeDasharray="2 4" vertical={false} />
+    <XAxis dataKey={xc} tick={{ fontSize: 10.5, fill: "rgb(var(--muted))", fontFamily: MONO }} axisLine={{ stroke: "rgb(var(--fg))" }} tickLine={false} />
+    <YAxis tick={{ fontSize: 10.5, fill: "rgb(var(--muted))", fontFamily: MONO }} width={40} axisLine={false} tickLine={false} />
   </>);
   return (
     <div className="flex h-full min-h-[220px] flex-col">
@@ -77,15 +80,18 @@ export function InteractiveChart({ visual, data, rows, view }: VisualProps & { v
           {view === "bar" ? (
             <BarChart data={sorted} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               {axes}{tooltip}{legend}
-              {ys.map((y, i) => <Bar key={y} dataKey={y} hide={hidden.has(y)} fill={COLORS[i % 4]} radius={[4, 4, 0, 0]} cursor="pointer"
-                onClick={(d) => click((d as { payload?: unknown }).payload, y)} isAnimationActive />)}
+              {ys.map((y, i) => (
+                <Bar key={y} dataKey={y} hide={hidden.has(y)} fill={COLORS[i % 4]} radius={[3, 3, 0, 0]} cursor="pointer" maxBarSize={72}
+                  onClick={(d) => click((d as { payload?: unknown }).payload, y)} isAnimationActive>
+                  {i === 0 && sorted.map((r, k) => <Cell key={k} fill={num(r[y]) === peak ? "rgb(var(--hl))" : COLORS[0]} stroke={num(r[y]) === peak ? "rgb(var(--fg))" : "none"} />)}
+                </Bar>))}
             </BarChart>
           ) : (
             <LineChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               {axes}{tooltip}{legend}
-              {bands.map((b, i) => <ReferenceArea key={i} x1={String(b.from)} x2={String(b.to)} fill="rgb(var(--bad))" fillOpacity={0.15}
+              {bands.map((b, i) => <ReferenceArea key={i} x1={String(b.from)} x2={String(b.to)} fill="rgb(var(--hl))" fillOpacity={0.45}
                 label={{ value: String(b.label ?? ""), fontSize: 10, fill: "rgb(var(--bad))", position: "insideTop" }} />)}
-              {ys.map((y, i) => <Line key={y} dataKey={y} hide={hidden.has(y)} stroke={COLORS[i % 4]} strokeWidth={2} dot={{ r: 2.5 }}
+              {ys.map((y, i) => <Line key={y} dataKey={y} hide={hidden.has(y)} stroke={COLORS[i % 4]} strokeWidth={i === 0 ? 2.25 : 1.75} dot={{ r: 2.5, strokeWidth: 0, fill: COLORS[i % 4] }}
                 activeDot={{ r: 6, cursor: "pointer", onClick: (_ev: unknown, p: unknown) => click((p as { payload?: unknown }).payload, y) }} />)}
               {rows.length > 6 && <Brush dataKey={xc} height={18} stroke="rgb(var(--accent))" fill="rgb(var(--raised))" travellerWidth={8} />}
             </LineChart>

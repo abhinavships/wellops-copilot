@@ -36,8 +36,8 @@ export function VisualBody({ visual, answer }: { visual: Visual; answer: AnswerS
   return <SwitchableVisual visual={visual} data={data} rows={rows} answer={answer} view={view} />;
 }
 
-/** An inline generated-UI element in an answer: title, chart-type switcher, expand to the canvas. */
-export function VisualFrame({ visual, answer }: { visual: Visual; answer: AnswerSpec }) {
+/** An inline generated-UI element, styled as a figure in a technical paper: mono caption, ink rules, no card chrome. */
+export function VisualFrame({ visual, answer, index = 1 }: { visual: Visual; answer: AnswerSpec; index?: number }) {
   const { ctx } = useUi();
   const { data, err, rows } = useHandle(visual.handle, ctx.chatId);
   const key = viewKey(ctx.chatId, visual);
@@ -45,20 +45,18 @@ export function VisualFrame({ visual, answer }: { visual: Visual; answer: Answer
   const view = resolveView(views, useViewOverride(key));
   if (visual.type === "none") return null;
   const title = visual.title ?? titleCase(visual.type);
-  const chrome = !["kpi", "callout"].includes(visual.type);
   return (
-    <figure className={`gen-ui m-0 ${chrome ? "rounded-2xl border border-line/70 bg-panel shadow-[0_1px_2px_rgb(0_0_0/.04),0_8px_24px_-12px_rgb(0_0_0/.12)]" : ""}`} aria-label={title} data-testid="visual">
-      {chrome && (
-        <figcaption className="flex items-center gap-2 px-4 pb-1 pt-3">
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{title}</span>
-          <ViewSwitcher views={views} view={view} onView={(v) => setViewOverride(key, v)} />
-          <button type="button" onClick={() => expand(ctx.chatId, visual, answer, view)} aria-label="Expand to canvas" title="Open on the canvas"
-            className="grid h-7 w-7 place-items-center rounded-lg text-muted transition hover:bg-raised hover:text-fg">
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" /></svg>
-          </button>
-        </figcaption>
-      )}
-      <div className={chrome ? "px-4 pb-4 pt-2" : ""}>
+    <figure className="gen-ui m-0 rounded-2xl border border-line bg-panel/90 px-5 pb-5 pt-3 shadow-[0_1px_0_rgb(var(--line)),0_18px_40px_-28px_rgb(0_0_0/.35)]" aria-label={title} data-testid="visual">
+      <figcaption className="flex items-center gap-3 border-b border-fg/80 pb-2">
+        <span className="label shrink-0 text-fg">Fig. {index}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{title}</span>
+        <ViewSwitcher views={views} view={view} onView={(v) => setViewOverride(key, v)} />
+        <button type="button" onClick={() => expand(ctx.chatId, visual, answer, view)} aria-label="Expand to canvas" title="Open on the canvas"
+          className="grid h-7 w-7 place-items-center rounded-full text-muted transition hover:bg-raised hover:text-fg">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" /></svg>
+        </button>
+      </figcaption>
+      <div className="pt-4">
         {err && <p className="text-sm text-bad" role="alert">Could not load data: {err}</p>}
         {visual.handle && !data && !err && <div className="h-40 animate-pulse rounded-xl bg-raised" role="status" aria-label="Loading data" />}
         {(data || !visual.handle) && <SwitchableVisual visual={visual} data={data} rows={rows} answer={answer} view={view} />}

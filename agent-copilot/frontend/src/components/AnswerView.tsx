@@ -76,12 +76,12 @@ export function AnswerView({ answer, text, streaming, turn }: { answer?: AnswerS
   return (
     <div className="space-y-4">
       {lead && (
-        <div className="prose-chat text-[15px] leading-relaxed" aria-live={streaming ? "polite" : "off"}>
+        <div className="prose-chat text-[17px] leading-relaxed" aria-live={streaming ? "polite" : "off"}>
           <Md md={lead} claims={claims} />
           {streaming && <span className="dots text-muted" aria-hidden><span>●</span><span>●</span><span>●</span></span>}
         </div>
       )}
-      {visuals.map((v, i) => <VisualFrame key={i} visual={v} answer={answer!} />)}
+      {visuals.map((v, i) => <VisualFrame key={i} visual={v} answer={answer!} index={i + 2} />)}
       {extraConflicts.map((c, i) => <Card key={i} className="rounded-2xl p-4"><ConflictBody c={c} /></Card>)}
       {work ? (
         <details className="group text-sm" data-testid="show-work">

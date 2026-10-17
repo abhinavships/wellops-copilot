@@ -38,6 +38,8 @@ def open_dispute(deps: RunDeps, record_id: str, attr: str, claimed_value: Any = 
             "volume": "spill_est_volume_bbl", "status": "producing"}.get(attr, attr)
     if attr not in ATTRS:
         raise ToolError(f"can dispute {sorted(ATTRS)}; got {attr!r}")
+    if attr == "producing" and isinstance(claimed_value, str):  # "true"/"yes"/"producing" -> the words the UI shows
+        claimed_value = "producing" if claimed_value.strip().lower() in ("true", "yes", "producing", "1", "active") else "not producing"
     rid = record_id.strip().upper()
     if rid.startswith("WELL-"):  # a well: dispute its latest reading
         r = db.rows(f"SELECT inspection_id FROM {mac(deps, 'latest_status')} WHERE asset_id={lit(rid)}")
