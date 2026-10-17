@@ -48,7 +48,7 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 | L3 agent + skills | ✅ built (tested with TestModel, not yet run on a real model) | `backend/src/wellops/agent/` (agent, prompt, skills, turn), `skills/*/SKILL.md` (9) | `uv run pytest -q tests/test_agent.py` |
 | L4 verifier | ✅ gates + output_validator | `backend/src/wellops/verify/gates.py` | backend `uv run pytest -q` (33 pass) |
 | API (FastAPI + AG-UI) | ✅ live-verified ("15 wells not producing" via Nemotron free, verifier retry worked) | `backend/src/wellops/api/app.py`; run `cd backend && uv run uvicorn wellops.api.app:app --port 8000` | `uv run pytest -q tests/test_api.py` |
-| L5 UI | ✅ done against mocks (build+lint pass); not yet wired live. Mock fixtures contain made-up IDs (e.g. INS-0001-0211, CTX-0164-002) and say "unconfirmed until you decide" (contradicts ADR-013): never demo mock mode, replace fixtures with real data | `frontend/` | `npm i && npm run dev:mock`; screenshots: `node scripts/screenshots.mjs <dir>` |
+| L5 UI | ✅ LIVE against API (0434667): fixtures rebuilt from real tool output and verifier-checked; earlier note obsolete → (build+lint pass); not yet wired live. Mock fixtures contain made-up IDs (e.g. INS-0001-0211, CTX-0164-002) and say "unconfirmed until you decide" (contradicts ADR-013): never demo mock mode, replace fixtures with real data | `frontend/` | `npm i && npm run dev:mock`; screenshots: `node scripts/screenshots.mjs <dir>` |
 | L6 evals | 🟡 WIP (stream D): 18 golden cases (YAML + JSON schema), 60+ synthetic, scorers, Opik metrics, fault injection, key audit | `evals/` (own uv project) | key audit: **agrees 199, disagrees 0, not computable 77** (`evals/results/key_audit.md`) |
 | Mutated dataset | ✅ generator + checks; findings fixed in 5a98a76 (new well-type rules extracted from its manual, T200 fallback + dq flag; duplicate inspection ids flagged) | `evals/evals/mutate/` | evals `uv run pytest -q` (25 pass) |
 | Eval runner | ✅ `evals/evals/run.py` + Opik sink; never run against a live API | `evals/evals/run.py`, `runner/` | — |
@@ -77,6 +77,14 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 - 53: eval runner fake/api + failure taxonomy + WRITEUP/VIDEO_SCRIPT drafts (owns `evals/`, `docs/WRITEUP.md`, `docs/VIDEO_SCRIPT.md`).
 - Gotchas: the API server holds the DuckDB lock, so in-process scripts must use `DB_PATH=/tmp/<name>.duckdb` and ingest first.
   Small models send nested tool args as JSON strings; `Scope`/`AssertionIn` accept them (b9627e0).
+
+## 4c. DEMO RUNBOOK (presentation)
+1. API, Nemotron first (gemma4-e2b fails verifier retries; qwen3-vl untested at agent level):
+   `cd backend && MODEL_FALLBACKS="openrouter:nvidia/nemotron-3-super-120b-a12b:free,openrouter:poolside/laguna-s-2.1:free,ollama:qwen3-vl-8b-32k" uv run uvicorn wellops.api.app:app --port 8000`
+2. UI live: `cd frontend && npm run dev` → http://localhost:3000 (Q1 live: 30 s, 6/6 gates, 0 retries).
+3. Backup if the free quota runs out (about 50 req/day): `npm run dev:mock`. That's a replay of REAL tool outputs (make_fixtures.py, all verifier gates pass). Say so.
+4. Evals: fake target 18/18 (harness check), key audit 199/0/77, meta-eval recall 1.00; live gemma run 0/2 (verifier retries exhausted); see docs/WRITEUP.md.
+5. Known: Q7 map initial view clips WELL-0151 (pan); no wellops.verification event on RUN_ERROR.
 
 ## 5. Next actions (in order)
 1. Finish stream B: agent + verifier + API. Keep `uv run pytest -q` green in `backend/`.
