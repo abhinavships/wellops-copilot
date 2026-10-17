@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     rag_embed_dims: int = 768
     rag_embed_max: int = 4000  # new chunks embedded per reindex (the rest wait for the next one)
     cache_enabled: bool = True  # SQLite answer cache (off for evals: every case must run live)
+    skills_learn: bool = True  # distill/reinforce skills from finished turns (skills.on_turn_complete)
+    skills_llm_polish: bool = False  # optional Gemini rewrite of auto-skill name/description (never in tests)
+    skills_llm_model: str = "gemini-3.5-flash-lite"
     self_url: str = "http://127.0.0.1:8000"  # where this API (and its /mcp) is reachable from local agents
     harness: str = "native"  # native (Gemini agent over the WellOps tool registry) | pydantic (legacy test agent)
     opik_workspace: str = ""

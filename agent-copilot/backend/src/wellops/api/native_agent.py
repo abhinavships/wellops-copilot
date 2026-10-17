@@ -26,6 +26,9 @@ def _wrap(t) -> Tool:
     fn, ck = t.fn, t.context_kwarg
 
     async def call(**kw: Any) -> Any:
+        if (d := mcp_server.CURRENT.get()) is not None:  # the tool path, for skills.on_turn_complete
+            (log := mcp_server.CALL_LOG.setdefault(d.chat_id, [])).append({"name": t.name, "args": dict(kw)})
+            del log[:-60]  # bounded even if no hook consumes it
         if ck:
             kw[ck] = None
         out = fn(**kw)

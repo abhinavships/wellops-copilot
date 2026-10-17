@@ -280,6 +280,8 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
     ms = int((time.perf_counter() - t0) * 1000)
     trace = {"type": "CUSTOM", "name": "wellops.trace", "value": {"steps": steps, "total_ms": ms}}
     yield _sse(trace)
+    from wellops import skills  # learn or reinforce a playbook from this verified (or failed) tool path; never raises
+    skills.on_turn_complete(deps, message, steps, bool(state.get("ok")), state["spec"].visuals if state.get("spec") else [])
     actions = {"propose_correction", "dispute_data", "remember_correction", "ingest_file", "generate_image", "recall_conversations"}
     if settings.cache_enabled and state.get("ok") and state.get("spec") and not any(st["name"] in actions for st in steps):  # actions never replay
         sp = state["spec"]

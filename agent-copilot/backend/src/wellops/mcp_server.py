@@ -27,6 +27,7 @@ MEASURES = ["downtime_days", "spill_count", "spills", "total_volume_bbl", "volum
             "delta_c", "wellhead_c", "count", "n"]  # preferred y columns, most specific first
 UI_QUEUE: dict[str, list[Visual]] = {}  # chat_id -> visuals the agent asked to show this turn
 TOOL_LOG: dict[str, list[Any]] = {}  # chat_id -> ToolOut results this turn (for the verifier)
+CALL_LOG: dict[str, list[dict]] = {}  # chat_id -> [{"name", "args"}] this turn (skills.on_turn_complete distills it)
 PREVIEW_ROWS = 25
 
 
@@ -144,6 +145,21 @@ def search_knowledge(ctx: Context, query: str, k: int = 6, asset_id: str | None 
     tools, not this, for counts, statuses and numbers over time."""
     from wellops import rag
     return _out(ctx, rag.search_knowledge, query, k, asset_id, kind, start, end)
+
+
+@mcp.tool()
+def find_skills(ctx: Context, question: str, k: int = 3) -> str:
+    """Learned playbooks for this kind of question: ordered tool calls with {slot} arguments, the visual, and
+    pitfalls, ranked by fit and success rate. Optional: call first for multi-step questions, then follow the steps."""
+    from wellops import skills
+    return json.dumps(skills.find_skills(question, k), default=str)
+
+
+@mcp.tool()
+def get_skill(ctx: Context, skill_id: str) -> str:
+    """One playbook by id (from find_skills): full steps, pitfalls and example questions."""
+    from wellops import skills
+    return json.dumps(skills.get_skill(skill_id) or {"error": f"unknown skill {skill_id!r}"}, default=str)
 
 
 @mcp.tool()
