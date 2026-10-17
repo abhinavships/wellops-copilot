@@ -13,22 +13,43 @@ export function firstSentences(md: string, n = 2): string {
 }
 
 let current: HTMLAudioElement | null = null;
-export function stopSpeaking() { current?.pause(); current = null; }
+export function stopSpeaking() {
+  current?.pause(); current = null;
+  if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+}
 
-/** Speak text via the backend TTS proxy. Resolves when playback ends (or fails). */
+/** Free fallback: the browser's own voice (no credits, works offline). */
+function speakBrowser(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+    if (!synth) return resolve();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; u.rate = 1.05;
+    const v = synth.getVoices().find((x) => /en(-|_)US/.test(x.lang) && /Samantha|Google|Natural|Ava|Allison/i.test(x.name));
+    if (v) u.voice = v;
+    u.onend = () => resolve(); u.onerror = () => resolve();
+    synth.speak(u);
+  });
+}
+
+/** Speak text: ElevenLabs via the backend proxy (cached server-side); on any failure, the browser voice. */
 export async function speak(text: string): Promise<void> {
   stopSpeaking();
   if (!text.trim()) return;
-  const r = await fetch(`${API_BASE}/api/tts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-  if (!r.ok) throw new Error(r.status === 503 ? "Voice is not configured on the server" : `TTS failed (HTTP ${r.status})`);
-  const url = URL.createObjectURL(await r.blob());
-  const a = new Audio(url);
-  current = a;
-  await new Promise<void>((resolve) => {
-    const done = () => { URL.revokeObjectURL(url); if (current === a) current = null; resolve(); };
-    a.onended = done; a.onerror = done; a.onpause = done;
-    a.play().catch(done);
-  });
+  try {
+    const r = await fetch(`${API_BASE}/api/tts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    if (!r.ok) throw new Error(`TTS HTTP ${r.status}`);
+    const url = URL.createObjectURL(await r.blob());
+    const a = new Audio(url);
+    current = a;
+    const played = await new Promise<boolean>((resolve) => {
+      const done = (ok: boolean) => () => { URL.revokeObjectURL(url); if (current === a) current = null; resolve(ok); };
+      a.onended = done(true); a.onerror = done(false); a.onpause = done(true);
+      a.play().catch(done(false)); // autoplay blocked or bad audio -> fall back
+    });
+    if (played) return;
+  } catch { /* fall through to the browser voice */ }
+  await speakBrowser(text);
 }
 
 // Minimal Web Speech API typings (not in lib.dom for all TS versions).

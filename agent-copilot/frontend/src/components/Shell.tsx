@@ -16,7 +16,7 @@ import { viewsFor } from "@/components/visuals/Interactive";
 import { chartIntent, setCanvasOpen, setViewOverride, useBoard, viewKey } from "@/lib/board";
 import { titleCase } from "@/lib/format";
 import { MicButton, SpeakButton, VoiceToggle } from "@/components/Voice";
-import { firstSentences, speak, useDictation } from "@/lib/voice";
+import { firstSentences, speak, stopSpeaking, useDictation } from "@/lib/voice";
 
 const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -130,11 +130,16 @@ export function Shell() {
   const dictation = useDictation(setInput, (t) => { if (voiceOn && t.trim()) submit(t); });
   const last = turns[turns.length - 1];
   useEffect(() => {
-    if (!voiceOn || !last?.answer || last.status !== "done" || last.startedAt < voiceSince.current || spoken.current.has(last.id)) return;
+    if (!voiceOn || !last || last.startedAt < voiceSince.current || spoken.current.has(last.id)) return;
+    const say = last.answer ? firstSentences(last.answer.markdown, 2) : last.status === "error" ? "Sorry, that run failed." : "";
+    if (!say) return;
     spoken.current.add(last.id);
-    speak(firstSentences(last.answer.markdown, 2)).catch(() => { /* voice is best-effort */ });
+    speak(say).catch(() => { /* voice is best-effort */ });
   }, [voiceOn, last]);
-  const toggleVoice = (v: boolean) => { voiceSince.current = v ? Date.now() : Infinity; setVoiceOn(v); };
+  const toggleVoice = (v: boolean) => {
+    voiceSince.current = v ? Date.now() : Infinity; setVoiceOn(v);
+    if (v) speak("Voice mode on.").catch(() => {}); else stopSpeaking(); // the click unlocks audio playback in the browser
+  };
 
   const switchUser = (id: string) => { setUserId(id); ls.set("wellops.user", id); setLeftOpen(false); };
   const sidebar = (
@@ -159,6 +164,12 @@ export function Shell() {
           <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><path d="M16 9.5 9.6 15.9a4 4 0 0 1-5.7-5.7l6.8-6.8a2.7 2.7 0 0 1 3.8 3.8l-6.7 6.7a1.3 1.3 0 0 1-1.9-1.9L12 6" /></svg>
         </button>
         <MicButton listening={dictation.listening} supported={dictation.supported} onToggle={dictation.toggle} />
+        <button type="button" onClick={() => toggleVoice(!voiceOn)} aria-pressed={voiceOn} data-testid="voice-mode"
+          title={voiceOn ? "Voice mode on: answers are read aloud, dictation sends automatically" : "Turn on voice mode"}
+          className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] transition ${voiceOn ? "bg-fg text-bg" : "text-muted hover:bg-raised hover:text-fg"}`}>
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden><path d="M4 8v4h3l4 3V5L7 8H4z" />{voiceOn && <path d="M14 7.5a3.5 3.5 0 0 1 0 5M16 5a7 7 0 0 1 0 10" />}</svg>
+          {voiceOn ? "Voice on" : "Voice"}
+        </button>
         <span className="flex-1" />
         {busy ? <button type="button" onClick={stop} aria-label="Stop" className="grid h-9 w-9 place-items-center rounded-full bg-fg text-bg"><span className="h-3 w-3 rounded-sm bg-bg" /></button>
           : <button type="submit" disabled={!input.trim()} aria-label="Send" className="grid h-9 w-9 place-items-center rounded-full bg-fg text-bg transition disabled:opacity-25">
