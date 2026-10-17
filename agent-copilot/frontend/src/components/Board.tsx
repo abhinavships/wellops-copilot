@@ -5,6 +5,7 @@ import { fetchHandle, rowsAsObjects } from "@/lib/api";
 import { close, clear, setBoardWidth, setCanvasOpen, toFront, update, useBoard, useCanvasOpen, type BoardCard } from "@/lib/board";
 import { SwitchableVisual, ViewSwitcher, viewsFor } from "@/components/visuals/Interactive";
 import { titleCase } from "@/lib/format";
+import { CanvasMenu } from "@/components/CanvasMenu";
 
 const MIN_W = 280, MIN_H = 200;
 
@@ -71,6 +72,7 @@ function Card({ card }: { card: BoardCard }) {
 export function Board() {
   const cards = useBoard();
   const ref = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current; if (!el) return;
     const ro = new ResizeObserver(() => setBoardWidth(el.clientWidth)); ro.observe(el); setBoardWidth(el.clientWidth);
@@ -82,10 +84,11 @@ export function Board() {
       <div className="pointer-events-none sticky left-0 top-0 z-20 flex items-center gap-2 px-4 py-2">
         <span className="rounded-md bg-panel/90 px-2 py-1 text-xs font-semibold shadow">Canvas · {cards.length} card{cards.length === 1 ? "" : "s"}</span>
         {cards.length > 0 && <button type="button" onClick={clear} className="pointer-events-auto rounded-md bg-panel/90 px-2 py-1 text-xs text-muted shadow hover:text-bad">Clear</button>}
-        <button type="button" onClick={() => setCanvasOpen(false)} data-testid="canvas-close" className="pointer-events-auto ml-auto rounded-md bg-panel/90 px-2.5 py-1 text-xs font-medium shadow hover:text-accent">Close · Esc</button>
+        <div className="ml-auto"><CanvasMenu exportTarget={content} /></div>
+        <button type="button" onClick={() => setCanvasOpen(false)} data-testid="canvas-close" className="pointer-events-auto rounded-md bg-panel/90 px-2.5 py-1 text-xs font-medium shadow hover:text-accent">Close · Esc</button>
       </div>
       {cards.length === 0 && <p className="absolute inset-x-0 top-1/3 text-center text-sm text-muted">Expand a chart from an answer to place it here; drag, resize and switch chart types.</p>}
-      <div className="relative" style={{ width: extent.w, height: extent.h, marginTop: -40 }}>
+      <div ref={content} className="relative" style={{ width: extent.w, height: extent.h, marginTop: -40 }}>
         {cards.map((c) => <Card key={c.id} card={c} />)}
       </div>
     </div>

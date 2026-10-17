@@ -6,6 +6,7 @@ import { SwitchableVisual, ViewSwitcher, viewsFor } from "@/components/visuals/I
 import { useHandle } from "@/components/VisualFrame";
 import { clear, close, pin, setCanvasOpen, sourceKey, update, useBoard, type BoardCard } from "@/lib/board";
 import { titleCase } from "@/lib/format";
+import { CanvasMenu } from "@/components/CanvasMenu";
 
 export const DRAG_MIME = "application/x-wellops-visual";
 export type DragPayload = { chatId: string; visual: Visual; conflicts?: AnswerSpec["conflicts"] };
@@ -70,6 +71,7 @@ export function CompareDock({ open, onClose }: { open: boolean; onClose: () => v
         {cards.length > 0 && <button type="button" onClick={clear} className="rounded-full px-2.5 py-1 text-xs text-muted hover:bg-raised hover:text-bad">Clear</button>}
         <button type="button" onClick={onClose} aria-label="Close compare" className="grid h-7 w-7 place-items-center rounded-full text-muted hover:bg-raised hover:text-fg">✕</button>
       </div>
+      <div className="border-b border-line/70 px-4 py-2"><CanvasMenu bar /></div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {cards.length === 0 ? (
           <div className={`grid h-full min-h-[300px] place-items-center rounded-2xl border-2 border-dashed text-center transition ${over ? "border-fg bg-hl/25" : "border-line"}`}>

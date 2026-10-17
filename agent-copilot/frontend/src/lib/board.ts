@@ -64,6 +64,21 @@ export const isPinned = (chatId: string, source: string) => { load(); return car
 export const update = (id: string, patch: Partial<BoardCard>) => save(cards.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 export const close = (id: string) => save(cards.filter((c) => c.id !== id));
 export const clear = () => save([]);
+/** Current cards (non-reactive read, for saving). */
+export const snapshotBoard = (): BoardCard[] => { load(); return cards; };
+/** Replace the whole board with a saved canvas. */
+export const replaceBoard = (next: BoardCard[]) => save(next.map((c) => ({ ...c })));
+/** Add a saved canvas below the current cards, keeping its own layout; figures already on the board are skipped. */
+export function mergeBoard(more: BoardCard[]): number {
+  load();
+  const fresh = more.filter((m) => !cards.some((c) => c.id === m.id));
+  if (!fresh.length) return 0;
+  const bottom = cards.reduce((m, c) => Math.max(m, c.y + c.h), 0);
+  const top = Math.min(...fresh.map((c) => c.y));
+  const dy = cards.length ? bottom + GAP * 2 - top : 0;
+  save([...cards, ...fresh.map((c) => ({ ...c, y: c.y + dy }))]);
+  return fresh.length;
+}
 export const toFront = (id: string) => {
   const top = Math.max(0, ...cards.map((c) => c.z ?? 0));
   const c = cards.find((x) => x.id === id);

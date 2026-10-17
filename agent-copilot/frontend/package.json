@@ -14,6 +14,7 @@
     "shots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
+    "html-to-image": "1.11.13",
     "maplibre-gl": "6.14.0",
     "next": "16.4.2",
     "react": "19.3.1",

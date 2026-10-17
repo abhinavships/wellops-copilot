@@ -46,6 +46,11 @@ export function fetchHandle(handle: string, chatId: string): Promise<HandleData>
   return p;
 }
 
+/** Drop cached handle data for a chat (a reloaded saved canvas re-registers its handles). */
+export function forgetHandles(chatId: string) {
+  for (const k of [...handleCache.keys()]) if (k.startsWith(`${chatId}:`)) handleCache.delete(k);
+}
+
 export async function undoAssertion(id: string, c: Ctx): Promise<void> {
   if (MOCK) return;
   const r = await fetch(`${API_BASE}/api/assertions/${encodeURIComponent(id)}/undo`, { method: "POST", headers: ctxHeaders(c) });
