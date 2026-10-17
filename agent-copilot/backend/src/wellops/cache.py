@@ -17,7 +17,6 @@ from typing import Any
 
 from wellops.settings import ROOT, settings
 
-PATH = ROOT / "backend" / "cache.sqlite"
 _LOCK = threading.Lock()
 _CON: sqlite3.Connection | None = None
 MEMORY_WORDS = re.compile(r"\b(we|our|my|me|i|yesterday|earlier|last time|discussed|remember)\b", re.I)
@@ -26,7 +25,8 @@ MEMORY_WORDS = re.compile(r"\b(we|our|my|me|i|yesterday|earlier|last time|discus
 def con() -> sqlite3.Connection:
     global _CON
     if _CON is None:
-        _CON = sqlite3.connect(PATH, check_same_thread=False)
+        path = settings.db_path.with_suffix(".cache.sqlite")  # one cache per database, never shared across servers
+        _CON = sqlite3.connect(path, check_same_thread=False)
         _CON.execute("PRAGMA journal_mode=WAL")
         _CON.execute("CREATE TABLE IF NOT EXISTS turns (k TEXT PRIMARY KEY, question TEXT, payload TEXT, ms INTEGER, at REAL)")
         _CON.execute("CREATE TABLE IF NOT EXISTS tools (k TEXT PRIMARY KEY, payload TEXT, at REAL)")
@@ -52,9 +52,23 @@ def norm(q: str) -> str:
     return re.sub(r"[^\w\s-]", "", re.sub(r"\s+", " ", q.strip().lower()))
 
 
+def code_version() -> str:
+    """Prompt + tool definitions: any change to how answers are produced invalidates cached answers."""
+    global _CODE
+    if _CODE is None:
+        from wellops import mcp_server
+        from wellops.api import turn_stream
+        tools = [(t.name, t.description, json.dumps(t.parameters, sort_keys=True)) for t in mcp_server.mcp._tool_manager.list_tools()]
+        _CODE = hashlib.sha1(json.dumps([turn_stream.SYSTEM, tools]).encode()).hexdigest()[:12]
+    return _CODE
+
+
+_CODE: str | None = None
+
+
 def turn_key(question: str, principal: str, today: Any, model: str = "") -> str:
     who = principal if MEMORY_WORDS.search(question) else "*"
-    raw = f"{norm(question)}|{today}|{settings.active_dataset}|{data_version()}|{who}|{model}"
+    raw = f"{norm(question)}|{today}|{settings.active_dataset}|{data_version()}|{who}|{model}|{code_version()}"
     return hashlib.sha1(raw.encode()).hexdigest()
 
 
