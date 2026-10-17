@@ -21,6 +21,8 @@ from wellops.tools.core import Scope, ToolError
 mcp = FastMCP("wellops", stateless_http=True, json_response=True)
 mcp.settings.streamable_http_path = "/"
 
+MEASURES = ["downtime_days", "spill_count", "spills", "total_volume_bbl", "volume_bbl", "cost_usd", "total_cost_usd",
+            "delta_c", "wellhead_c", "count", "n"]  # preferred y columns, most specific first
 UI_QUEUE: dict[str, list[Visual]] = {}  # chat_id -> visuals the agent asked to show this turn
 TOOL_LOG: dict[str, list[Any]] = {}  # chat_id -> ToolOut results this turn (for the verifier)
 PREVIEW_ROWS = 25
@@ -196,6 +198,21 @@ def show_visual(ctx: Context, type: VisualT, handle: str | None = None, title: s
     one well -> status_card; ranking/compare -> bar; over time -> line; lat/lon -> map; area x month -> heatmap;
     duties -> obligation_timeline; a single number -> kpi. Call once per visual, after the data tool."""
     deps = _deps(ctx)
+    st = tools.store().get(deps.chat_id, handle) if handle else None
+    if st and st.rows and type == "line" and not y and {"wellhead_c", "ambient_c"} <= set(st.result.columns):
+        y_list = ["wellhead_c", "ambient_c"]
+        UI_QUEUE.setdefault(deps.chat_id, []).append(Visual(type=type, handle=handle, title=title or "Wellhead vs air (°C)",
+                                                            encodings={"x": x or "inspected_at", "y": y_list}))
+        return json.dumps({"ok": True, "shown": type, "handle": handle})
+    if st and st.rows and type in ("bar", "kpi", "gauge"):
+        cols, row = st.result.columns, st.rows[0]
+        nums = [c for c in cols if isinstance(row.get(c), (int, float)) and not isinstance(row.get(c), bool)]
+        if not y or y not in cols:  # the measure the question is about, not the first numeric column
+            y = next((c for c in MEASURES if c in nums), nums[-1] if nums else None)
+        if not x or x not in cols:
+            x = next((c for c in cols if c not in nums), None)
+        if not title and y:
+            title = y.replace("_", " ").capitalize() + (f" by {x.replace('_', ' ')}" if x else "")
     enc = {k: v for k, v in {"x": x, "y": y, "series": series}.items() if v}
     UI_QUEUE.setdefault(deps.chat_id, []).append(Visual(type=type, handle=handle, title=title, encodings=enc))
     return json.dumps({"ok": True, "shown": type, "handle": handle})
