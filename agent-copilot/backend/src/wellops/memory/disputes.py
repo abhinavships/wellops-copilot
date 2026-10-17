@@ -67,8 +67,9 @@ def open_dispute(deps: RunDeps, record_id: str, attr: str, claimed_value: Any = 
                    "value": f"Δ {delta:.1f} °C vs {thr:g} °C needed → {'producing' if delta >= thr else 'not producing'}",
                    "kind": "doc"})
     for n in db.rows("""SELECT note_id, author_user_id, created_at, text FROM notes WHERE dataset_id=? AND asset_id=?
-                        AND created_at <= ?::TIMESTAMPTZ ORDER BY created_at DESC LIMIT 3""",
-                     [deps.active_dataset, i["asset_id"], deps.asof]):
+                        AND created_at <= ?::TIMESTAMPTZ AND created_at >= ?::TIMESTAMPTZ - INTERVAL 45 DAY
+                        ORDER BY created_at DESC LIMIT 3""",  # only notes near the disputed reading are evidence
+                     [deps.active_dataset, i["asset_id"], deps.asof, raw["inspected_at"]]):
         ev.append({"source": f"note {n['note_id']}", "label": "Field note", "quote": n["text"],
                    "author": names.get(n["author_user_id"], n["author_user_id"]), "at": n["created_at"],
                    "kind": "note", "id": n["note_id"]})

@@ -78,7 +78,16 @@ github.com/FlytBaseAILabs/flytbase-ahc-swe-asset-intelligence-dataset). Re-clone
 - Gotchas: the API server holds the DuckDB lock, so in-process scripts must use `DB_PATH=/tmp/<name>.duckdb` and ingest first.
   Small models send nested tool args as JSON strings; `Scope`/`AssertionIn` accept them (b9627e0).
 
-## 4a'. ARCHITECTURE v2 (Hermes harness), current
+## 4a''. CURRENT STATE (v3): Hermes + Gemini, SQLite cache, proof-first feedback, paper UI
+- Model: Gemini via Hermes (GEMINI_API_KEY; HERMES_MODEL default gemini-3.8-flash; gemini-4-argon selectable, 45-53 s/turn). Nemotron removed.
+- Speed: reasoning off; SQLite turn cache (backend/cache.sqlite) keyed by question+clock+data_version+model; a repeat takes 3-5 ms.
+  Corrections, disputes and uploads change data_version, so stale answers never replay; action turns are never cached.
+- Feedback: "that's wrong" → dispute_data tool → proof card (record, author, rule, nearby notes, earlier corrections) →
+  POST /api/disputes/{id}/resolve {correct|keep}. No correction on the user's word alone (pattern: AG-UI human-in-the-loop + provenance gating).
+- UI: paper/Argus aesthetic, live AG-UI run trace (wellops.trace), one primary figure per answer, Show work collapsed.
+- Live: Q1 8.7 s, Q6 15.9 s (49/42/42), dispute 16 s, cached repeats 3-5 ms.
+
+## 4a'. ARCHITECTURE v2 (Hermes harness)
 UI (Next.js, client-side gen-UI) ─AG-UI SSE─▶ FastAPI /api/agui ─▶ hermes_bridge ─subprocess─▶ hermes/runner.py (Hermes AIAgent, own venv)
 Hermes ─MCP streamable HTTP─▶ /mcp (wellops.mcp_server, in the API process, shares DuckDB): 20 tools (status, downtime, spills, obligations,
 RCA, costs, evidence, docs, sql, corrections, memory, show_visual, generate_image, ingest_file, analyze_image, list_media, user_tables).
