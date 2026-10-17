@@ -9,3 +9,4 @@ node_modules/
 **/.cache/
 **/test-results/
 **/playwright-report/
+**/.tts_cache/

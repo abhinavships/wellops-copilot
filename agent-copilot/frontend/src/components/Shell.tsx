@@ -11,6 +11,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { ToolChip } from "@/components/ToolChip";
 import { UiContext, type EvidenceTarget } from "@/components/ui";
 import { XrayPanel } from "@/components/XrayPanel";
+import { MicButton, SpeakButton, VoiceToggle } from "@/components/Voice";
+import { firstSentences, speak, useDictation } from "@/lib/voice";
 
 const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -80,6 +82,19 @@ export function Shell() {
   const submit = useCallback((text: string, scenario?: string) => { const t = text.trim(); if (!t || busy) return; setInput(""); send(t, scenario); }, [busy, send]);
   const ui = useMemo(() => ({ ctx, openEvidence: setEvidence, send: (t: string) => submit(t) }), [ctx, submit]);
 
+  // voice: dictation fills the composer (auto-sends in voice mode); voice mode reads new answers aloud. Off by default.
+  const [voiceOn, setVoiceOn] = useState(false);
+  const voiceSince = useRef(Infinity);
+  const spoken = useRef(new Set<string>());
+  const dictation = useDictation(setInput, (t) => { if (voiceOn && t.trim()) submit(t); });
+  const last = turns[turns.length - 1];
+  useEffect(() => {
+    if (!voiceOn || !last?.answer || last.status !== "done" || last.startedAt < voiceSince.current || spoken.current.has(last.id)) return;
+    spoken.current.add(last.id);
+    speak(firstSentences(last.answer.markdown, 2)).catch(() => { /* voice is best-effort */ });
+  }, [voiceOn, last]);
+  const toggleVoice = (v: boolean) => { voiceSince.current = v ? Date.now() : Infinity; setVoiceOn(v); };
+
   const switchUser = (id: string) => { setUserId(id); ls.set("wellops.user", id); setLeftOpen(false); };
   const sidebar = (
     <Sidebar users={users} userId={userId} onUser={switchUser} chats={chats} chatId={chatId} onChat={(id) => { setChatId(id); setLeftOpen(false); }}
@@ -106,6 +121,7 @@ export function Shell() {
               onClick={() => setTheme((t) => (t === "dark" ? "light" : t === "light" ? "system" : "dark"))} aria-label={`Theme: ${theme}. Click to change`}>
               {theme === "dark" ? "Dark" : theme === "light" ? "Light" : "Auto"}
             </button>
+            <VoiceToggle on={voiceOn} onChange={toggleVoice} />
             <button type="button" aria-pressed={xrayDesktop && xrayOpen} className="rounded-md border border-line px-2 py-1 text-xs hover:border-accent"
               onClick={() => { if (window.matchMedia("(min-width:1024px)").matches) setXrayDesktop((v) => !v); else setXrayOpen((v) => !v); }}>X-ray</button>
           </header>
@@ -135,6 +151,7 @@ export function Shell() {
                   {t.status === "error" && <p role="alert" className="rounded-lg border border-bad/30 bg-bad/10 p-3 text-sm text-bad">The run failed: {t.error}</p>}
                   {(t.text || t.answer) ? <AnswerView answer={t.answer} text={t.text} streaming={t.status === "running" && !t.answer} />
                     : t.status === "running" && <p className="text-sm text-muted">Thinking<span className="dots"><span>.</span><span>.</span><span>.</span></span></p>}
+                  {t.answer && t.status === "done" && <SpeakButton markdown={t.answer.markdown} />}
                 </article>
               ))}
               <div ref={bottom} />
@@ -147,6 +164,7 @@ export function Shell() {
               <textarea id="msg" rows={1} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask about wells, spills, downtime, obligations…"
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input); } }}
                 className="max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-line bg-bg px-3 py-2 text-sm" />
+              <MicButton listening={dictation.listening} supported={dictation.supported} onToggle={dictation.toggle} />
               {busy ? <button type="button" onClick={stop} className="h-10 rounded-xl border border-line px-4 text-sm font-semibold hover:border-bad">Stop</button>
                 : <button type="submit" disabled={!input.trim()} className="h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-50">Send</button>}
             </div>

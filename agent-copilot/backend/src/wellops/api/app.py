@@ -21,13 +21,14 @@ from pydantic_ai.ui.ag_ui import AGUIAdapter
 from wellops import memory
 from wellops.agent import get_agent
 from wellops.agent.turn import record
-from wellops.contracts import AnswerSpec, RunDeps
+from wellops.contracts import AnswerSpec, RunDeps, Visual
 from wellops.settings import settings
 from wellops.tools.core import ToolError, get_db, store
 from wellops.verify import VERIFICATIONS
 
 app = FastAPI(title="wellops")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+from .voice import router; app.include_router(router)  # noqa: E402, E702
 
 HISTORY: dict[str, list[ModelMessage]] = {}  # chat_id -> full pydantic-ai message history (server owns the transcript)
 AGENT_OVERRIDE: dict[str, Any] = {}  # tests set {"agent": Agent} to run without a network model
@@ -62,6 +63,22 @@ def _verification(chat_id: str) -> dict | None:
             "gates": [{"name": g.name, "ok": g.ok, "detail": "; ".join(g.details) or None} for g in last.gates]}
 
 
+DEFAULT_VISUAL = {"entity": "status_card", "entity_list": "table", "timeseries": "line", "category_measure": "bar",
+                  "geo_points": "map", "matrix": "heatmap", "obligation_set": "obligation_timeline", "diff": "correction_diff"}
+
+
+def ensure_visual(spec: AnswerSpec, chat_id: str) -> AnswerSpec:
+    """Generative UI must not depend on the model remembering a visual: default one from the result shape."""
+    if spec.visuals:
+        return spec
+    for h in dict.fromkeys(c.handle for c in spec.claims):
+        st = store().get(chat_id, h)
+        if st and st.result.shape in DEFAULT_VISUAL and st.rows:
+            spec.visuals = [Visual(type=DEFAULT_VISUAL[st.result.shape], handle=h)]
+            break
+    return spec
+
+
 def _capabilities(messages: list[ModelMessage]) -> list[dict]:
     out = []
     for m in messages:
@@ -91,7 +108,7 @@ async def agui(request: Request) -> Response:
     VERIFICATIONS.pop(deps.chat_id, None)
 
     async def on_complete(result):
-        spec: AnswerSpec = result.output
+        spec: AnswerSpec = ensure_visual(result.output, deps.chat_id)
         HISTORY[deps.chat_id] = result.all_messages()
         record(deps, prompt, spec)
         for c in _capabilities(result.new_messages()):
