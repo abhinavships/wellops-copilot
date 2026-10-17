@@ -18,6 +18,7 @@ from wellops.tools.core import store
 from wellops.verify.gates import MAX_RETRIES, verify
 
 from .native_agent import run_native
+from wellops.qa import correctness
 
 PROVIDERS = {  # provider -> (OpenAI-compatible base_url, default model, settings attr holding the key)
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash", "gemini_api_key"),  # LLM_MODEL=gemini-4-argon for max quality (45-53 s/turn)
@@ -159,6 +160,8 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
     headers = {"X-User-Id": deps.principal, "X-Chat-Id": deps.chat_id, "X-Clock-Today": str(deps.today)}
     ask, attempts, spec, final_msgs = message, [], None, history
     tool_texts: list[str] = []  # every raw tool result this turn, so evidence numbers count as grounded
+    tool_args: list[dict] = []  # what the agent actually queried (the correctness check compares the window)
+    verdict = None
     mcp_server.UI_QUEUE.pop(deps.chat_id, None)
     mcp_server.TOOL_LOG.pop(deps.chat_id, None)
     for attempt in range(MAX_RETRIES + 1):
@@ -170,6 +173,7 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
         async for ev in run_native(deps, req):
             k = ev.get("ev")
             if k == "tool_start":
+                tool_args.append(ev.get("args") or {})
                 yield ({"type": "TOOL_CALL_START", "toolCallId": ev["id"], "toolCallName": ev["name"].removeprefix("mcp__wellops__"), "parentMessageId": mid})
                 yield ({"type": "TOOL_CALL_ARGS", "toolCallId": ev["id"], "delta": json.dumps(ev.get("args"), default=str)})
                 yield ({"type": "TOOL_CALL_END", "toolCallId": ev["id"]})
@@ -200,16 +204,22 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
             from wellops.verify.gates import GateResult
             v.gates.append(GateResult(name="tool_grounded", ok=False, details=["no WellOps tool was called"]))
             v.ok = False
+        verdict = correctness.check(deps, message, spec.markdown, results, tool_args)  # right or wrong vs the data
+        correctness.log(deps, message, verdict, attempt, MODEL)
         attempts.append(v)
-        if v.ok or attempt == MAX_RETRIES:
+        if (v.ok and verdict.verdict != "incorrect") or attempt == MAX_RETRIES:
             break
-        ask = f"Verification failed, fix your answer and call tools again if needed: {v.diff()}"
+        problems = [p for p in (v.diff() if not v.ok else "", verdict.mismatches() if verdict.verdict == "incorrect" else "") if p]
+        ask = ("Your answer is wrong or unsupported. Fix exactly these, calling tools again if needed (for a period like "
+               "'last 4 months' use resolve_entity's window): " + " | ".join(problems))
     HISTORY[deps.chat_id] = final_msgs
     record(deps, message, spec)
     last = attempts[-1]
     yield ({"type": "CUSTOM", "name": "wellops.verification", "value": {
         "ok": last.ok, "retries": len(attempts) - 1, "harness": "wellops-native",
         "gates": [{"name": g.name, "ok": g.ok, "detail": "; ".join(g.details) or None} for g in last.gates]}})
+    if verdict is not None:
+        yield ({"type": "CUSTOM", "name": "wellops.correctness", "value": verdict.as_dict()})
     yield ({"type": "CUSTOM", "name": "wellops.usage", "value": {"model": MODEL}})
     yield ({"type": "CUSTOM", "name": "wellops.answer", "value": spec.model_dump(mode="json")})
     state.update(ok=last.ok, spec=spec, retries=len(attempts) - 1)
@@ -255,6 +265,12 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
         elif ev["type"] == "TOOL_CALL_RESULT" and ev["toolCallId"] in starts:
             name, st = starts.pop(ev["toolCallId"])
             steps.append({"name": name, "ms": int((now - st) * 1000), "ok": '"error"' not in ev.get("content", "")[:40]})
+        elif ev.get("name") == "wellops.correctness":
+            c = ev["value"]
+            bad = [x for x in c["checks"] if not x["ok"]]
+            steps.append({"name": "correctness", "ms": 0, "ok": c["verdict"] != "incorrect",
+                          "detail": {"correct": f"✓ right · {len(c['checks'])} checks", "incorrect": f"× wrong · {len(bad)} mismatch",
+                                     "unverified": "not checkable"}[c["verdict"]]})
         elif ev.get("name") == "wellops.verification":
             v = ev["value"]
             steps.append({"name": "verify", "ms": 0, "ok": v["ok"], "detail": f"{sum(g['ok'] for g in v['gates'])}/{len(v['gates'])} gates"
