@@ -11,6 +11,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { UiContext, type EvidenceTarget } from "@/components/ui";
 import { XrayPanel } from "@/components/XrayPanel";
 import { RunTrace } from "@/components/RunTrace";
+import { CompareDock } from "@/components/CompareDock";
 import { CanvasModal } from "@/components/Board";
 import { viewsFor } from "@/components/visuals/Interactive";
 import { chartIntent, setCanvasOpen, setViewOverride, useBoard, viewKey } from "@/lib/board";
@@ -34,6 +35,7 @@ export function Shell() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [xrayOpen, setXrayOpen] = useState(false);
   const [xrayDesktop, setXrayDesktop] = useState(false); // X-ray is opt-in, from the menu
+  const [compareOpen, setCompareOpen] = useState(true); // the right-hand compare dock (wide screens)
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -194,7 +196,9 @@ export function Shell() {
             <button type="button" className={`${iconBtn} md:hidden`} onClick={() => setLeftOpen(true)} aria-label="Open menu">☰</button>
             <h1 className="label min-w-0 flex-1 truncate"><span className="text-fg">WellOps</span> · case file <span suppressHydrationWarning>{chatId.replace(/^chat-/, "").slice(0, 6).toUpperCase()}</span><span className="hidden sm:inline"> · {chats.find((c) => c.chat_id === chatId)?.title || "new inquiry"}</span></h1>
             <span className="label hidden md:inline">as of {today}</span>
-            {boardCount > 0 && <button type="button" onClick={() => setCanvasOpen(true)} className="rounded-full px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg">Canvas · {boardCount}</button>}
+            <button type="button" onClick={() => setCompareOpen((v) => !v)} aria-pressed={compareOpen} data-testid="toggle-compare"
+              className={`hidden rounded-full px-3 py-1.5 text-xs transition lg:inline-flex ${compareOpen ? "bg-fg text-bg" : "border border-line text-muted hover:border-fg hover:text-fg"}`}>
+              Compare{boardCount ? ` · ${boardCount}` : ""}</button>
             <div className="relative">
               <button type="button" className={iconBtn} aria-label="More" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)} data-testid="menu">
                 <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden><circle cx="4" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="16" cy="10" r="1.6" /></svg>
@@ -251,6 +255,7 @@ export function Shell() {
           {turns.length > 0 && <div className="mx-auto w-full max-w-[720px] px-4 pb-4">{composer}</div>}
         </main>
 
+        <CompareDock open={compareOpen && !xrayDesktop} onClose={() => setCompareOpen(false)} />
         {xrayDesktop && <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-line bg-panel lg:block" aria-label="X-ray panel">
           <div className="border-b border-line px-4 py-2 text-sm font-semibold">X-ray</div>{xray}</aside>}
         {xrayOpen && (

@@ -4,7 +4,8 @@ import type { AnswerSpec, HandleData, Visual } from "@/contracts";
 import { fetchHandle, rowsAsObjects } from "@/lib/api";
 import { useUi } from "@/components/ui";
 import { SwitchableVisual, ViewSwitcher, viewsFor } from "@/components/visuals/Interactive";
-import { expand, setViewOverride, useViewOverride, viewKey } from "@/lib/board";
+import { expand, isPinned, setViewOverride, sourceKey, useBoard, useViewOverride, viewKey } from "@/lib/board";
+import { addToCompare, dragStart } from "@/components/CompareDock";
 import { titleCase } from "@/lib/format";
 
 /** Fetch a visual's handle (if any) for the current chat. */
@@ -45,12 +46,15 @@ export function VisualFrame({ visual, answer, index = 1 }: { visual: Visual; ans
   const view = resolveView(views, useViewOverride(key));
   if (visual.type === "none") return null;
   const title = visual.title ?? titleCase(visual.type);
+  const payload = { chatId: ctx.chatId, visual, conflicts: answer.conflicts };
   return (
-    <figure className="gen-ui m-0 rounded-2xl border border-line bg-panel/90 px-5 pb-5 pt-3 shadow-[0_1px_0_rgb(var(--line)),0_18px_40px_-28px_rgb(0_0_0/.35)]" aria-label={title} data-testid="visual">
+    <figure draggable onDragStart={(e) => dragStart(e, payload)} className="gen-ui m-0 rounded-2xl border border-line bg-panel/90 px-5 pb-5 pt-3 shadow-[0_1px_0_rgb(var(--line)),0_18px_40px_-28px_rgb(0_0_0/.35)]" aria-label={title} data-testid="visual">
       <figcaption className="flex items-center gap-3 border-b border-fg/80 pb-2">
+        <span className="cursor-grab select-none text-muted active:cursor-grabbing" title="Drag to the compare panel" aria-hidden>⠿</span>
         <span className="label shrink-0 text-fg">Fig. {index}</span>
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{title}</span>
         <ViewSwitcher views={views} view={view} onView={(v) => setViewOverride(key, v)} />
+        <CompareButton chatId={ctx.chatId} visual={visual} onAdd={() => addToCompare(payload)} />
         <button type="button" onClick={() => expand(ctx.chatId, visual, answer, view)} aria-label="Expand to canvas" title="Open on the canvas"
           className="grid h-7 w-7 place-items-center rounded-full text-muted transition hover:bg-raised hover:text-fg">
           <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" /></svg>
@@ -62,5 +66,16 @@ export function VisualFrame({ visual, answer, index = 1 }: { visual: Visual; ans
         {(data || !visual.handle) && <SwitchableVisual visual={visual} data={data} rows={rows} answer={answer} view={view} />}
       </div>
     </figure>
+  );
+}
+
+function CompareButton({ chatId, visual, onAdd }: { chatId: string; visual: Visual; onAdd: () => void }) {
+  useBoard(); // re-render when the compare set changes
+  const on = isPinned(chatId, sourceKey(visual));
+  return (
+    <button type="button" onClick={onAdd} disabled={on} data-testid="add-compare" title="Add to the compare panel"
+      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${on ? "bg-hl/60 text-fg" : "border border-line text-muted hover:border-fg hover:text-fg"}`}>
+      {on ? "✓ Comparing" : "+ Compare"}
+    </button>
   );
 }

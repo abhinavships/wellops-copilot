@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     hermes_provider: str = "gemini"  # gemini (Google OpenAI-compatible endpoint)
     hermes_model: str = ""  # default per provider below
+    self_url: str = "http://127.0.0.1:8000"  # where this API (and its /mcp) is reachable from local agents
     harness: str = "hermes"  # hermes (Hermes Agent over MCP) | pydantic (in-process pydantic-ai agent)
     opik_workspace: str = ""
     opik_project_name: str = "wellops"

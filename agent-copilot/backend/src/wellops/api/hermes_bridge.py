@@ -40,9 +40,12 @@ Rules:
 - After getting data, call show_visual with the result handle and the visual that fits (status_card for one well,
   bar for rankings, line for time series, map for locations, heatmap for area x month, kpi for one number).
   If the user asks for a specific chart, use exactly that type.
-- If the user says a value is WRONG (a reading, a status, a spill), call dispute_data first: it shows the proof
-  and Correct/Keep buttons. Say in one sentence what the evidence shows and ask if they still want it corrected.
-  Never correct data on the user's word alone. Rules or facts the user states (not disputes) go to remember_correction.
+- If the user says recorded data is wrong or gives corrected values, call propose_correction ONCE with every field
+  they changed and their reason verbatim. Then report per field: applied / needs confirmation / rejected (why), and
+  name any note that disagrees. After an applied correction, re-run the affected query (well_status or obligations)
+  and state the consequence (e.g. "WELL-0164 is now producing", "now a reportable spill: SR-01 notice overdue").
+- Status statements about a well ("it's running", "shut in since 14 Oct") also go to propose_correction as
+  {"producing": ...}; planned work, shared facts and rules go to remember_correction.
 - If notes and sensor data disagree, say so plainly and name both sources.
 - For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id.
 - Mention the key record id (e.g. INS-0001-0203) once, inline.
@@ -113,7 +116,7 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
     mcp_server.TOOL_LOG.pop(deps.chat_id, None)
     for attempt in range(MAX_RETRIES + 1):
         req = dict(message=ask, history=final_msgs, system=system, headers=headers,
-                   mcp_url="http://127.0.0.1:8000/mcp/", model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.hermes_provider,
+                   mcp_url=f"{settings.self_url}/mcp/", model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.hermes_provider,
                    request_overrides=FAST,
                    home=str(HERMES_DIR / "home" / re.sub(r"\W", "_", deps.chat_id)))
         mid, text, err = f"m-{uuid.uuid4().hex[:8]}", "", None
@@ -215,7 +218,7 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
     ms = int((time.perf_counter() - t0) * 1000)
     trace = {"type": "CUSTOM", "name": "wellops.trace", "value": {"steps": steps, "total_ms": ms}}
     yield _sse(trace)
-    actions = {"dispute_data", "remember_correction", "ingest_file", "generate_image", "recall_conversations"}
+    actions = {"propose_correction", "dispute_data", "remember_correction", "ingest_file", "generate_image", "recall_conversations"}
     if state.get("ok") and state.get("spec") and not any(st["name"] in actions for st in steps):  # actions never replay
         sp = state["spec"]
         handles = {h: (st.result.model_dump(mode="json"), st.rows) for h in

@@ -143,19 +143,25 @@ def remember_correction(ctx: Context, kind: str, scope_level: str, scope_key: st
 
 
 @mcp.tool()
-def dispute_data(ctx: Context, record_id: str, attr: str, claimed_value: str | None = None, reason: str | None = None) -> str:
-    """The user says a value is WRONG. Do NOT correct it yet: this pulls the proof (raw record, who recorded it,
-    the rule applied, field notes, earlier corrections) and shows the user a proof card with Correct/Keep buttons.
-    record_id: a well id or INS- id. attr: producing | wellhead_temp_c | ambient_temp_c | spill_est_volume_bbl | spill.
-    Then answer in one sentence summarising what the evidence says and ask whether to correct it."""
-    from wellops.memory.disputes import open_dispute
+def propose_correction(ctx: Context, record_id: str, changes: dict[str, Any], reason: str | None = None,
+                       date: str | None = None) -> str:
+    """The user says recorded data is wrong or gives corrected values. Pass EVERY field they changed in one call:
+    changes = {"wellhead_temp_c": 41.0, "ambient_temp_c": 19.9, "spill_est_volume_bbl": 5.4, "spill": false,
+    "producing": "producing", "delta_c": ..., "delta_min_c": ...}. record_id: INS- id, or a well id (+ date YYYY-MM-DD
+    for a specific day's inspection). reason: the user's justification, verbatim ("thermal gun was faulty; re-measured").
+    Each field is checked against column constraints: invalid values (non-numbers, "infinity", implausible) are
+    rejected; computed fields (Δ, threshold, margin) are explained; justified valid changes are applied now (attributed,
+    original kept); unjustified ones wait for the user's confirmation; status statements are recorded as claims and
+    checked against the data. A proof card with the evidence is shown automatically. Then say in 1-2 sentences what
+    was applied, rejected or needs confirmation, and name any conflicting note (author + text)."""
+    from wellops.memory.disputes import propose_correction as fn
     deps = _deps(ctx)
     try:
-        d = open_dispute(deps, record_id, attr, claimed_value, reason)
+        d = fn(deps, record_id, changes, reason, date)
     except ToolError as e:
         return json.dumps({"error": str(e)})
     UI_QUEUE.setdefault(deps.chat_id, []).append(Visual(type="dispute", title=f"Proof · {d['record']['id']}", encodings=d))
-    return json.dumps({k: d[k] for k in ("dispute_id", "current_value", "claimed_value", "verdict_hint", "evidence")}, default=str)
+    return json.dumps({k: d[k] for k in ("dispute_id", "record", "changes", "conflicts", "effects", "ask")}, default=str)
 
 
 @mcp.tool()
