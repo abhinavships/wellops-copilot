@@ -32,7 +32,7 @@ export function MicButton({ listening, supported, onToggle }: { listening: boole
   return (
     <button type="button" onClick={onToggle} aria-pressed={listening} data-testid="mic"
       aria-label={listening ? "Stop dictation" : "Dictate a question"}
-      className={`h-10 rounded-xl border px-3 text-sm ${listening ? "animate-pulse border-bad bg-bad/10 text-bad" : "border-line hover:border-accent"}`}>
+      className={`grid h-9 w-9 place-items-center rounded-full text-sm transition ${listening ? "animate-pulse bg-bad/15 text-bad" : "text-muted hover:bg-raised hover:text-fg"}`}>
       {listening ? "● Stop" : "🎤"}
     </button>
   );

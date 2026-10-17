@@ -148,7 +148,7 @@ export function Shell() {
     <form onSubmit={(e) => { e.preventDefault(); submit(input); }}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}
-      className={`rounded-[30px] border bg-panel p-2 shadow-[0_1px_0_rgb(var(--line)),0_24px_48px_-28px_rgb(0_0_0/.45)] transition ${dragOver ? "border-fg ring-4 ring-hl/60" : "border-line"}`}>
+      className={`rounded-[30px] border bg-panel p-2 shadow-[0_1px_0_rgb(var(--line)),0_24px_48px_-28px_rgb(0_0_0/.45)] transition focus-within:border-fg/40 ${dragOver ? "border-fg ring-4 ring-hl/60" : "border-line"}`}>
       <label htmlFor="msg" className="sr-only">Message</label>
       <textarea id="msg" rows={2} value={input} onChange={(e) => setInput(e.target.value)} placeholder={dragOver ? "Drop a CSV, PDF or photo to ingest…" : "Ask about a well, an area, spills, downtime…"}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(input); } }}
