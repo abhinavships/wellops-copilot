@@ -13,6 +13,7 @@ import { XrayPanel } from "@/components/XrayPanel";
 import { RunTrace } from "@/components/RunTrace";
 import { CompareDock } from "@/components/CompareDock";
 import { CanvasModal } from "@/components/Board";
+import { CanvasToast } from "@/components/CanvasMenu";
 import { viewsFor } from "@/components/visuals/Interactive";
 import { chartIntent, setCanvasOpen, setViewOverride, useBoard, viewKey } from "@/lib/board";
 import { titleCase } from "@/lib/format";
@@ -267,6 +268,7 @@ export function Shell() {
         )}
       </div>
       <CanvasModal />
+      <CanvasToast />
       <EvidenceDrawer target={evidence} ctx={ctx} onClose={() => setEvidence(null)} />
     </UiContext.Provider>
   );
