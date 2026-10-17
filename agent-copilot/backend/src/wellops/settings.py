@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     opik_api_key: str = ""
     elevenlabs_api_key: str = ""
+    harness: str = "hermes"  # hermes (Hermes Agent over MCP) | pydantic (in-process pydantic-ai agent)
     opik_workspace: str = ""
     opik_project_name: str = "wellops"
     opik_url_override: str = ""

@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.143.3",
     "httpx>=0.28.1",
     "logfire>=5.2.0",
+    "mcp>=1.10,<2",
     "pydantic>=2.14.1",
     "pydantic-ai-slim[ag-ui,openai,openrouter]>=2.57.0",
     "pydantic-settings>=2.16.0",

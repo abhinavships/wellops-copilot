@@ -29,6 +29,7 @@ from wellops.verify import VERIFICATIONS
 app = FastAPI(title="wellops")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 from .voice import router; app.include_router(router)  # noqa: E402, E702
+from .ingest_api import router as ingest_router; app.include_router(ingest_router)  # noqa: E402, E702
 from .media_gen_api import router as media_gen_router; app.include_router(media_gen_router)  # noqa: E402, E702
 
 HISTORY: dict[str, list[ModelMessage]] = {}  # chat_id -> full pydantic-ai message history (server owns the transcript)
@@ -99,6 +100,13 @@ async def agui(request: Request) -> Response:
     except ValidationError as e:
         raise HTTPException(422, str(e)) from e
     deps = deps_from(request, request.headers.get("x-chat-id") or run_input.thread_id)
+    if settings.harness == "hermes" and not AGENT_OVERRIDE:
+        from fastapi.responses import StreamingResponse
+        from .hermes_bridge import stream_turn
+        users = [m for m in run_input.messages if getattr(m, "role", None) == "user"]
+        text = str(users[-1].content) if users else ""
+        return StreamingResponse(stream_turn(deps, text, run_input.thread_id, run_input.run_id),
+                                 media_type="text/event-stream")
     history = HISTORY.get(deps.chat_id)
     if history:  # the server already holds the transcript: only take the new user message from the client
         users = [m for m in run_input.messages if getattr(m, "role", None) == "user"]
@@ -177,8 +185,12 @@ def get_record(kind: str, rid: str) -> dict:
 @app.get("/api/health")
 def health() -> dict:
     n = get_db().rows("SELECT count(*) n FROM wells WHERE dataset_id=?", [settings.active_dataset])[0]["n"]
-    return {"ok": True, "dataset": settings.active_dataset, "wells": n, "models": settings.fallback_models,
+    return {"ok": True, "dataset": settings.active_dataset, "wells": n, "harness": settings.harness, "models": settings.fallback_models,
             "instance": INSTANCE}
 
 
 INSTANCE = uuid.uuid4().hex[:8]
+
+from wellops import mcp_server  # noqa: E402
+
+mcp_server.install(app)

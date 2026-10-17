@@ -18,16 +18,16 @@ NUM_RE = re.compile(r"(?<![\w.-])-?\d[\d,]*(?:\.\d+)?")
 ID_RE = re.compile(r"\b(?:[A-Z]{2,5}-\d{2,4}(?:-\d{2,4})*|A-[0-9a-f]{8}|[A-Z]{2}-\d\d)\b")
 
 ALLOWED_VISUALS = {
-    "scalar": {"none", "table", "status_card"},
+    "scalar": {"none", "table", "status_card", "kpi", "gauge"},
     "entity": {"status_card", "table", "evidence_chain", "none"},
     "entity_list": {"table", "status_card", "map", "evidence_chain", "conflict_card", "correction_diff", "none"},
-    "timeseries": {"line", "bar", "table", "none"},
-    "category_measure": {"bar", "table", "none"},
+    "timeseries": {"line", "bar", "table", "timeline", "none"},
+    "category_measure": {"bar", "table", "kpi", "line", "none"},
     "geo_points": {"map", "table", "none"},
     "matrix": {"heatmap", "table", "none"},
     "obligation_set": {"obligation_timeline", "table", "none"},
     "diff": {"correction_diff", "table", "none"},
-    "text": {"none", "table", "evidence_chain"},
+    "text": {"none", "table", "evidence_chain", "image", "ingest_report"},
 }
 
 
