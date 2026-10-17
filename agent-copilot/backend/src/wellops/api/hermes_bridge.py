@@ -195,7 +195,8 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
     ms = int((time.perf_counter() - t0) * 1000)
     trace = {"type": "CUSTOM", "name": "wellops.trace", "value": {"steps": steps, "total_ms": ms}}
     yield _sse(trace)
-    if state.get("ok") and state.get("spec"):
+    actions = {"dispute_data", "remember_correction", "ingest_file", "generate_image", "recall_conversations"}
+    if state.get("ok") and state.get("spec") and not any(st["name"] in actions for st in steps):  # actions never replay
         sp = state["spec"]
         handles = {h: (st.result.model_dump(mode="json"), st.rows) for h in
                    {v.handle for v in sp.visuals if v.handle} | {c.handle for c in sp.claims}
