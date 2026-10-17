@@ -5,7 +5,8 @@ import fs from "node:fs";
 const out = process.argv[2] ?? "./shots";
 const base = process.argv[3] ?? "http://localhost:3100";
 fs.mkdirSync(out, { recursive: true });
-const ids = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];
+// Scenario ids from src/mock/fixtures.json (backend/scripts/make_fixtures.py); override with SHOTS=q2,q3
+const ids = (process.env.SHOTS ?? "q2,q3,q6,q7,q8,q12").split(",");
 const browser = await chromium.launch();
 
 async function shot(id, { w, h, scheme, tag }) {
@@ -15,11 +16,13 @@ async function shot(id, { w, h, scheme, tag }) {
   await page.goto(base);
   await page.getByTestId(`suggest-${id}`).click();
   await page.waitForSelector('[data-testid="turn"][data-status="done"]', { timeout: 20000 });
-  await page.waitForTimeout(id === "d" ? 3500 : 800);
+  await page.waitForTimeout(id === "q7" ? 3500 : 800);
   await page.screenshot({ path: `${out}/${tag}-${id}.png`, fullPage: false });
   await ctx.close();
 }
 for (const id of ids) await shot(id, { w: 1440, h: 1000, scheme: "light", tag: "desktop" });
-for (const id of ["b", "g", "h"]) await shot(id, { w: 1440, h: 1000, scheme: "dark", tag: "dark" });
-for (const id of ["a", "b", "d", "g", "i"]) await shot(id, { w: 390, h: 844, scheme: "light", tag: "mobile" });
+if (!process.env.SHOTS) {
+  for (const id of ["q3", "q12"]) await shot(id, { w: 1440, h: 1000, scheme: "dark", tag: "dark" });
+  for (const id of ["q2", "q12"]) await shot(id, { w: 390, h: 844, scheme: "light", tag: "mobile" });
+}
 await browser.close();

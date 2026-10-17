@@ -1,10 +1,10 @@
 "use client";
 import type { VisualProps } from ".";
-import type { CitationKind } from "@/contracts";
 import { useUi } from "@/components/ui";
+import { citationFor } from "@/lib/api";
 import { fmtDate, titleCase, useWidth } from "@/lib/format";
 
-const KIND_COLOR: Record<string, string> = { inspection: "--c1", maintenance: "--c2", report: "--c4", reg_event: "--bad", note: "--c3" };
+const KIND_COLOR: Record<string, string> = { inspection: "--c1", maintenance: "--c2", report: "--c4", report_fact: "--c4", report_compliance: "--c4", reg_event: "--bad", note: "--c3", assertion: "--accent" };
 
 function wrap(t: string, max: number): string[] {
   const out: string[] = []; let cur = "";
@@ -34,8 +34,8 @@ export function EvidenceChain({ rows }: VisualProps) {
             const p = pos(i); const kind = String(r.kind); const col = KIND_COLOR[kind] ?? "--muted";
             return (
               <g key={i} transform={`translate(${p.x},${p.y})`} tabIndex={0} role="button" aria-label={`${kind} ${r.id}: ${r.label}`} style={{ cursor: "pointer" }}
-                onClick={() => openEvidence({ citation: { kind: kind as CitationKind, id: String(r.id) } })}
-                onKeyDown={(e) => e.key === "Enter" && openEvidence({ citation: { kind: kind as CitationKind, id: String(r.id) } })}>
+                onClick={() => openEvidence({ citation: citationFor(kind, String(r.id), r.span) })}
+                onKeyDown={(e) => e.key === "Enter" && openEvidence({ citation: citationFor(kind, String(r.id), r.span) })}>
                 <rect width={nw} height={NH} rx={10} fill="rgb(var(--raised))" stroke={`rgb(var(${col}))`} strokeWidth={1.5} />
                 <rect width={5} height={NH} rx={2} fill={`rgb(var(${col}))`} />
                 <text x={14} y={17} fontSize={10} fontWeight={700} fill={`rgb(var(${col}))`}>{titleCase(kind).toUpperCase()}{r.at ? ` · ${fmtDate(String(r.at))}` : ""}</text>

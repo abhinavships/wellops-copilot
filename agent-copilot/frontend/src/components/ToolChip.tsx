@@ -6,7 +6,9 @@ import { fmtMs } from "@/lib/format";
 export function argsSummary(argsText: string): string {
   try {
     const o = JSON.parse(argsText) as Record<string, unknown>;
-    return Object.entries(o).map(([k, v]) => `${k}=${Array.isArray(v) ? `[${v.join(",")}]` : String(v)}`).join(", ");
+    const fmt = (v: unknown): string => (Array.isArray(v) ? `[${v.map(fmt).join(",")}]`
+      : v && typeof v === "object" ? `{${Object.entries(v).map(([k, x]) => `${k}:${fmt(x)}`).join(", ")}}` : String(v));
+    return Object.entries(o).map(([k, v]) => `${k}=${fmt(v)}`).join(", ");
   } catch { return argsText; }
 }
 

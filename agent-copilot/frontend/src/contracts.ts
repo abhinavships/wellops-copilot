@@ -87,14 +87,15 @@ export interface AnswerSpec {
 }
 
 // ---- Custom AG-UI events -------------------------------------------------------------------------------------
-export const CUSTOM_EVENTS = ["wellops.answer", "wellops.verification", "wellops.capability", "wellops.conflict"] as const;
+export const CUSTOM_EVENTS = ["wellops.answer", "wellops.verification", "wellops.capability", "wellops.conflict", "wellops.usage"] as const;
 
-export interface VerificationGate { name: string; ok: boolean; detail?: string }
-export interface VerificationEvent { gates: VerificationGate[]; retries: number; trace_url?: string }
-export interface CapabilityEvent { kind: string; name: string; action: string; [k: string]: unknown }
-/** Optional extra (not in the pydantic contract): token/cost/trace info. */
+/** api.app._verification: the last verifier attempt; retries = attempts - 1. */
+export interface VerificationGate { name: string; ok: boolean; detail?: string | null }
+export interface VerificationEvent { ok?: boolean; gates: VerificationGate[]; retries: number; trace_url?: string }
+export interface CapabilityEvent { kind: string; name: string; action: string; path?: string | null; [k: string]: unknown }
+/** wellops.usage (api.app): tokens and model; cost/trace are optional extras. */
 export interface UsageEvent {
-  input_tokens?: number; output_tokens?: number; cost_usd?: number; model?: string; trace_url?: string;
+  input_tokens?: number | null; output_tokens?: number | null; cost_usd?: number; model?: string | null; trace_url?: string;
 }
 
 // ---- REST ----------------------------------------------------------------------------------------------------
@@ -110,8 +111,12 @@ export interface HandleData {
   notes?: string[];
 }
 
+/** GET /api/records/{kind}/{id}: one row, or a list when the id matches several rows. */
+export interface RecordData { kind: string; id: string; record: Record<string, unknown> | Record<string, unknown>[] }
+
 export interface User { user_id: string; name: string; role: string; team_id: string }
 export interface ChatSummary { chat_id: string; title?: string | null; updated_at?: string | null }
+export interface Health { ok: boolean; dataset: string; wells: number; models: string[]; instance: string }
 
 // ---- AG-UI ---------------------------------------------------------------------------------------------------
 export interface AguiMessage { id: string; role: "user" | "assistant" | "system" | "tool"; content: string }

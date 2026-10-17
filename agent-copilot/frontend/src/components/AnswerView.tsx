@@ -22,7 +22,8 @@ function ClaimChip({ claim, children }: { claim: Claim; children: ReactNode }) {
 
 function withClaims(node: ReactNode, claims: Claim[]): ReactNode {
   if (!claims.length) return node;
-  const re = new RegExp(`(${[...claims].sort((a, b) => b.text.length - a.text.length).map((c) => esc(c.text)).join("|")})`, "g");
+  // Whole tokens only, so a claim "26" does not light up inside "2026".
+  const re = new RegExp(`(?<![\\w.])(${[...claims].sort((a, b) => b.text.length - a.text.length).map((c) => esc(c.text)).join("|")})(?![\\w])`, "g");
   const used = new Set<string>();
   const walk = (n: ReactNode): ReactNode =>
     Children.map(n, (ch) => {

@@ -1,27 +1,10 @@
-import type { ChatSummary, HandleData, User } from "@/contracts";
-import { MOCK_RECORDS, SCENARIOS } from "@/mock/fixtures";
+import type { ChatSummary, Citation, HandleData, RecordData, User } from "@/contracts";
+import { MOCK_RECORDS, MOCK_USERS, SCENARIOS } from "@/mock/fixtures";
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
 export const MOCK = process.env.NEXT_PUBLIC_MOCK === "1";
-export const DEFAULT_TODAY = "2026-10-17";
+export const DEFAULT_TODAY = "2026-10-17"; // = backend settings.clock_today
 
-export const MOCK_USERS: User[] = [
-  { user_id: "U-101", name: "Emily Carter", role: "production_supervisor", team_id: "TEAM-SW" },
-  { user_id: "U-102", name: "Jake Morales", role: "field_operator", team_id: "TEAM-SW" },
-  { user_id: "U-103", name: "Sarah Mitchell", role: "field_inspector", team_id: "TEAM-SW" },
-  { user_id: "U-104", name: "Ryan Brooks", role: "field_inspector", team_id: "TEAM-SW" },
-  { user_id: "U-201", name: "Michael Turner", role: "production_supervisor", team_id: "TEAM-NE" },
-  { user_id: "U-202", name: "Jessica Reed", role: "field_inspector", team_id: "TEAM-NE" },
-  { user_id: "U-203", name: "Ashley Bennett", role: "field_inspector", team_id: "TEAM-NE" },
-  { user_id: "U-204", name: "Tyler Hughes", role: "field_operator", team_id: "TEAM-NE" },
-  { user_id: "U-301", name: "Robert Hayes", role: "maintenance_lead", team_id: "TEAM-MX" },
-  { user_id: "U-302", name: "Daniel Foster", role: "maintenance_technician", team_id: "TEAM-MX" },
-  { user_id: "U-303", name: "Kevin Price", role: "maintenance_technician", team_id: "TEAM-MX" },
-  { user_id: "U-304", name: "Amy Collins", role: "maintenance_technician", team_id: "TEAM-MX" },
-  { user_id: "U-305", name: "Megan Ward", role: "maintenance_technician", team_id: "TEAM-MX" },
-  { user_id: "U-401", name: "Laura Simmons", role: "hse_officer", team_id: "TEAM-HSE" },
-  { user_id: "U-402", name: "Chris Dalton", role: "hse_officer", team_id: "TEAM-HSE" },
-];
 
 export interface Ctx { userId: string; chatId: string; today: string }
 export const ctxHeaders = (c: Ctx): Record<string, string> => ({
@@ -69,16 +52,28 @@ export async function undoAssertion(id: string, c: Ctx): Promise<void> {
   if (!r.ok) throw new Error(`Undo failed: HTTP ${r.status}`);
 }
 
-/** Assumed endpoint (not in the contract yet): raw record behind a citation. */
-export async function fetchRecord(kind: string, id: string, c: Ctx): Promise<unknown> {
+/**
+ * Evidence-chain rows use kinds the records API does not know: "report_fact"/"report_compliance" with id
+ * "MNT-…#field" are spans inside that maintenance report. Map any row to the citation the API can resolve.
+ */
+export function citationFor(kind: string, id: string, span?: unknown): Citation {
+  if (kind.startsWith("report_")) {
+    const sp = Array.isArray(span) && span.length === 2 ? (span as [number, number]) : null;
+    return { kind: "report", id: id.split("#")[0], span: sp, label: id.split("#")[1] ?? null };
+  }
+  return { kind: kind as Citation["kind"], id };
+}
+
+/** GET /api/records/{kind}/{id} -> {kind, id, record}; returns the record (one row or several). */
+export async function fetchRecord(kind: string, id: string, c: Ctx): Promise<RecordData["record"]> {
   if (MOCK) {
     const rec = MOCK_RECORDS[`${kind}:${id}`];
-    if (rec) return rec;
-    throw new Error("Record not in mock set");
+    if (rec) return rec.record;
+    throw new Error("Record not in the fixture set");
   }
   const r = await fetch(`${API_BASE}/api/records/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, { headers: ctxHeaders(c) });
   if (!r.ok) throw new Error(`Record ${kind}/${id} -> HTTP ${r.status}`);
-  return r.json();
+  return ((await r.json()) as RecordData).record;
 }
 
 /** Normalise rows to objects regardless of whether the backend sends arrays or dicts. */

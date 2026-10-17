@@ -25,6 +25,8 @@ function saveTurns(chatId: string, turns: Turn[]) {
 
 export function reduceEvent(t: Turn, ev: AguiEvent, now = Date.now()): Turn {
   switch (ev.type) {
+    // A verifier retry streams a fresh message; show the latest attempt, not all of them glued together.
+    case "TEXT_MESSAGE_START": return { ...t, text: "" };
     case "TEXT_MESSAGE_CONTENT": return { ...t, text: t.text + ev.delta };
     case "TEXT_MESSAGE_CHUNK": return ev.delta ? { ...t, text: t.text + ev.delta } : t;
     case "TOOL_CALL_START":

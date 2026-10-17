@@ -12,9 +12,11 @@ export function Heatmap({ visual, data, rows }: VisualProps) {
   const xs = [...new Set(rows.map((r) => String(r[xc])))];
   const ys = [...new Set(rows.map((r) => String(r[yc])))];
   const cell = new Map(rows.map((r) => [`${r[yc]}|${r[xc]}`, num(r[vc])]));
+  // Grouped counts omit empty groups: a missing cell is encodings.fill, else 0 for count columns.
+  const fill = num(e.fill) ?? (/count/i.test(vc) ? 0 : null);
   const vals = [...cell.values()].filter((v): v is number => v !== null);
   const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
-  const labelW = 52, cw = Math.max(26, Math.floor(((width || 320) - labelW) / Math.max(xs.length, 1)));
+  const labelW = Math.min(150, Math.max(52, 8 + 7 * Math.max(0, ...ys.map((y) => y.length)))), cw = Math.max(26, Math.floor(((width || 320) - labelW) / Math.max(xs.length, 1)));
   return (
     <div ref={ref} className="w-full">
       <div role="table" aria-label={`${titleCase(vc)} by ${titleCase(yc)} and ${titleCase(xc)}`}>
@@ -23,9 +25,9 @@ export function Heatmap({ visual, data, rows }: VisualProps) {
         </div>
         {ys.map((y) => (
           <div role="row" key={y} className="flex items-center">
-            <div role="rowheader" style={{ width: labelW }} className="pr-2 text-right font-mono text-xs font-medium">{y}</div>
+            <div role="rowheader" style={{ width: labelW }} className="truncate pr-2 text-right font-mono text-xs font-medium" title={y}>{y}</div>
             {xs.map((x) => {
-              const v = cell.get(`${y}|${x}`) ?? null; const t = v === null ? 0 : (v - min) / (max - min || 1);
+              const v = cell.get(`${y}|${x}`) ?? fill; const t = v === null ? 0 : (v - min) / (max - min || 1);
               return (
                 <div role="cell" key={x} title={`${y} · ${x}: ${fmtVal(v)}`} style={{ width: cw, height: 34, background: `rgb(var(--accent) / ${0.08 + t * 0.85})` }}
                   className="flex items-center justify-center border border-panel text-xs font-semibold tabular-nums">

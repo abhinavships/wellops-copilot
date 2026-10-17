@@ -8,7 +8,9 @@ export function StatusCard({ visual, data, rows }: VisualProps) {
   const r = rows[0] ?? {};
   const col = (k: string, fb: string) => (typeof e[k] === "string" ? (e[k] as string) : fb);
   const title = String(r[col("title", data?.columns[0] ?? "")] ?? visual.title ?? "");
-  const status = r[col("status", "state")];
+  const raw = r[col("status", "state")];
+  // well_status gives `producing` as a boolean; show it as words
+  const status = typeof raw === "boolean" ? (raw ? "producing" : "not producing") : raw;
   const value = num(r[col("value", "value")]);
   const threshold = num(r[col("threshold", "threshold")]);
   const unit = typeof e.unit === "string" ? e.unit : "";
