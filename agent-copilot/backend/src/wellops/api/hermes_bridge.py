@@ -24,7 +24,12 @@ from wellops.verify.gates import MAX_RETRIES, verify
 
 HERMES_DIR = ROOT / "hermes"
 HERMES_PY = HERMES_DIR / ".venv" / "bin" / "python"
-MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+PROVIDERS = {  # provider -> (base_url, default Nemotron model id, settings attr holding the key)
+    "nvidia": ("https://integrate.api.nvidia.com/v1", "nvidia/nemotron-3-super-120b-a12b", "nvidia_api_key"),
+    "openrouter": ("https://openrouter.ai/api/v1", "nvidia/nemotron-3-super-120b-a12b:free", "openrouter_api_key"),
+}
+BASE_URL, _DEFAULT_MODEL, _KEY_ATTR = PROVIDERS[settings.hermes_provider]
+MODEL = settings.hermes_model or _DEFAULT_MODEL
 HISTORY: dict[str, list[dict]] = {}  # chat_id -> Hermes (OpenAI-format) message history
 
 SYSTEM = """You are WellOps, an oil-field asset copilot. Today is {today}; the user is {principal}.
@@ -87,7 +92,7 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
     mcp_server.TOOL_LOG.pop(deps.chat_id, None)
     for attempt in range(MAX_RETRIES + 1):
         req = dict(message=ask, history=final_msgs, system=system, headers=headers,
-                   mcp_url="http://127.0.0.1:8000/mcp/", model=MODEL, api_key=settings.openrouter_api_key,
+                   mcp_url="http://127.0.0.1:8000/mcp/", model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.hermes_provider,
                    home=str(HERMES_DIR / "home" / re.sub(r"\W", "_", deps.chat_id)))
         mid, text, err = f"m-{uuid.uuid4().hex[:8]}", "", None
         yield _sse({"type": "TEXT_MESSAGE_START", "messageId": mid, "role": "assistant"})

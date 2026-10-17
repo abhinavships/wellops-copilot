@@ -27,7 +27,8 @@ def main() -> None:
         "mcp_servers": {"wellops": {"url": req["mcp_url"], "headers": req["headers"], "timeout": 120}},
     }))
     os.environ["HERMES_HOME"] = str(home)
-    os.environ["OPENROUTER_API_KEY"] = req["api_key"]
+    os.environ["OPENROUTER_API_KEY" if req.get("provider") == "openrouter" else "OPENAI_API_KEY"] = req["api_key"]
+    base_url = req.get("base_url", "https://openrouter.ai/api/v1")
 
     real_stdout = sys.stdout
     sys.stdout = sys.stderr  # Hermes prints banners/spinners; keep stdout for our protocol
@@ -41,7 +42,8 @@ def main() -> None:
             real_stdout.flush()
 
         agent = AIAgent(
-            model=req["model"], provider="openrouter", api_key=req["api_key"], base_url="https://openrouter.ai/api/v1",
+            model=req["model"], provider="openrouter" if req.get("provider") == "openrouter" else "custom",
+            api_key=req["api_key"], base_url=base_url,
             enabled_toolsets=["mcp-wellops"], quiet_mode=True, skip_context_files=True, skip_memory=True,
             max_iterations=int(req.get("max_iterations", 12)), tool_delay=0.0, platform="api",
             tool_start_callback=lambda tid, name, args: out(ev="tool_start", id=tid, name=name, args=args),

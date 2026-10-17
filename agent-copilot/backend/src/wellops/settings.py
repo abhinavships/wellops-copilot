@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     opik_api_key: str = ""
     elevenlabs_api_key: str = ""
+    nvidia_api_key: str = ""
+    hermes_provider: str = "nvidia"  # nvidia (integrate.api.nvidia.com) | openrouter
+    hermes_model: str = ""  # default per provider below
     harness: str = "hermes"  # hermes (Hermes Agent over MCP) | pydantic (in-process pydantic-ai agent)
     opik_workspace: str = ""
     opik_project_name: str = "wellops"
