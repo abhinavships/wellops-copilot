@@ -1,8 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { VisualProps } from ".";
 import { Badge, CitationChip, stateTone } from "@/components/ui";
 import { fmtVal, num, titleCase } from "@/lib/format";
+import { locLines, useLocations, type MapPin } from "@/lib/geo";
+import { WellMap } from "./WellMap";
+import { areaContext } from "./MapView";
 
 type Note = { kind?: string; ref?: string; author?: string; text?: string; window?: string; role?: string; status?: string };
 
@@ -83,6 +86,8 @@ export function StatusCard({ visual, data, rows }: VisualProps) {
         </div>
       )}
 
+      {/^WELL-/i.test(title) && <LocationMini id={title} good={status === null ? null : good} />}
+
       {flags.map((f, i) => <p key={i} className="rounded-md border border-warn/40 bg-warn/10 px-3 py-1.5 text-xs text-warn">⚠ {f.detail}</p>)}
 
       {/* why */}
@@ -126,6 +131,27 @@ export function StatusCard({ visual, data, rows }: VisualProps) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Compact location map for one well: the well (amber, or red when not producing) over its area's other wells, faded. */
+function LocationMini({ id, good }: { id: string; good: boolean | null }) {
+  const locs = useLocations([id]);
+  const loc = locs?.[0];
+  const areaLocs = useLocations([], loc?.area_id ?? null);
+  const { pins, outline } = useMemo(() => {
+    if (!loc) return { pins: [] as MapPin[], outline: [] as [number, number][] };
+    const ctx = areaContext(areaLocs, new Set([id]));
+    const tone: MapPin["tone"] = good === false || (good === null && loc.producing === false) ? "bad" : "hl";
+    return { pins: [...ctx.context, { id, lat: loc.lat, lon: loc.lon, tone, lines: locLines(loc) }], outline: ctx.outline };
+  }, [loc, areaLocs, id, good]);
+  if (locs === null) return <div className="h-40 animate-pulse rounded-lg bg-raised" role="status" aria-label="Loading location" />;
+  if (!loc) return null;
+  const caption = `Location · ${loc.area ?? loc.area_id ?? ""} · ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`;
+  return (
+    <div data-testid="status-minimap">
+      <WellMap pins={pins} outline={outline} compact caption={caption} ariaLabel={`Location of ${id}`} />
     </div>
   );
 }

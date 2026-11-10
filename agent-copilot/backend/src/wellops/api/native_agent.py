@@ -17,6 +17,9 @@ from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent,
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
+from pydantic_ai.usage import UsageLimits
+
+MAX_MODEL_CALLS = 12  # per attempt: a loop of tool calls ends here and the turn answers from what it has
 
 from wellops import mcp_server
 from wellops.contracts import RunDeps
@@ -49,13 +52,19 @@ def agent(model: str, base_url: str, api_key: str) -> Agent:
 
 
 async def run_native(deps: RunDeps, req: dict) -> AsyncIterator[dict]:
+    import time
     a = agent(req["model"], req["base_url"], req["api_key"])
     token = mcp_server.CURRENT.set(deps)
     settings: ModelSettings = {"temperature": 0.2, "extra_body": {"reasoning_effort": "none"}}
+    deadline = req.get("deadline")  # time.monotonic() value: stop streaming here, the caller answers from tool data
     try:
         async with a.run_stream_events(req["message"], message_history=req.get("history") or None,
-                                       instructions=req.get("system"), model_settings=settings) as stream:
+                                       instructions=req.get("system"), model_settings=settings,
+                                       usage_limits=UsageLimits(request_limit=req.get("max_calls", MAX_MODEL_CALLS))) as stream:
             async for ev in stream:
+                if deadline and time.monotonic() > deadline:
+                    yield {"ev": "budget", "message": "time budget reached"}
+                    return
                 if isinstance(ev, FunctionToolCallEvent):
                     yield {"ev": "tool_start", "id": ev.part.tool_call_id, "name": ev.part.tool_name, "args": ev.part.args_as_dict()}
                 elif isinstance(ev, FunctionToolResultEvent):
@@ -67,6 +76,9 @@ async def run_native(deps: RunDeps, req: dict) -> AsyncIterator[dict]:
                 elif type(ev).__name__ == "AgentRunResultEvent":
                     yield {"ev": "final", "text": str(ev.result.output), "messages": ev.result.all_messages()}
     except Exception as e:  # provider/tool failure: report, never hang the stream
-        yield {"ev": "error", "message": f"{type(e).__name__}: {e}"}
+        if type(e).__name__ == "UsageLimitExceeded":  # looping on tools: the caller answers from what was fetched
+            yield {"ev": "budget", "message": str(e)}
+        else:
+            yield {"ev": "error", "message": f"{type(e).__name__}: {e}"}
     finally:
         mcp_server.CURRENT.reset(token)

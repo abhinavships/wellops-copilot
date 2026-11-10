@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WellOps System Design</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--box:#1c2330;--line:#30363d;--text:#e6edf3;--mute:#8b949e;--acc:#f0b429;--uniq:#3fb950;--lane:#11161d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:18px 24px 8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{margin:0;font-size:22px}
+h1 small{color:var(--mute);font-weight:400;font-size:14px;margin-left:8px}
+.tabs button,.ctl button{background:var(--box);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit;font-size:13px}
+.tabs button.on{border-color:var(--acc);color:var(--acc)}
+.ctl button.primary{background:var(--acc);color:#111;border-color:var(--acc);font-weight:600}
+main{display:grid;grid-template-columns:1fr 360px;gap:16px;padding:8px 24px 24px}
+@media(max-width:1000px){main{grid-template-columns:1fr}}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;position:sticky;top:12px;align-self:start;max-height:calc(100vh - 24px);overflow:auto}
+aside .q{background:var(--box);border-left:3px solid var(--acc);padding:8px 10px;border-radius:6px;font-size:13.5px;margin:6px 0 12px}
+aside .who{color:var(--mute);font-size:12px}
+aside h3{margin:6px 0;font-size:17px;color:var(--acc)}
+aside .step{color:var(--mute);font-size:12px}
+aside .body{font-size:14px}
+aside .body code{background:#0b0f14;padding:1px 5px;border-radius:4px;font-size:12.5px}
+aside .why{margin-top:10px;border:1px dashed var(--uniq);border-radius:8px;padding:8px 10px;font-size:13px;color:#b8f0c4}
+.ctl{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+#svg{width:100%;height:auto;display:block;background:var(--lane);border:1px solid var(--line);border-radius:12px}
+.zone rect{fill:#0f141b;stroke:#2a3240;stroke-dasharray:5 4}
+.zone text{fill:var(--mute);font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.box{cursor:pointer;transition:opacity .6s,filter .6s}
+.box rect.b{fill:var(--box);stroke:var(--line);stroke-width:1.2;transition:stroke .35s,stroke-width .35s}
+.box.ext rect.b{fill:#1a1630;stroke:#5a4a99}
+.box.store rect.b{fill:#13261d;stroke:#2f6b47}
+.box text.t{fill:var(--text);font-size:13.5px;font-weight:600}
+.box text.s{fill:var(--mute);font-size:11px}
+.box .u rect{fill:var(--uniq)}.box .u text{fill:#04140a;font-size:9.5px;font-weight:700}
+.edge line{stroke:#4a5568;stroke-width:1.3;transition:stroke .4s,opacity .6s,stroke-width .4s}
+.edge text{fill:#7d8896;font-size:10px;transition:opacity .6s}
+body.focus .box{opacity:.15;filter:grayscale(1)}
+body.focus .box.seen{opacity:.45;filter:grayscale(.3)}
+body.focus .box.hl{opacity:1;filter:drop-shadow(0 0 12px rgba(240,180,41,.7))}
+body.focus .box.hl rect.b{stroke:var(--acc);stroke-width:3}
+body.focus .box.nb{opacity:.7;filter:none}
+.edge text{opacity:0}.edge.sec line{opacity:0;stroke-dasharray:6 5}
+body.focus .edge line{opacity:.08}
+body.focus .edge.on line{opacity:1;stroke:var(--acc);stroke-width:2.4}
+body.focus .edge.on text{opacity:1;fill:var(--acc)}
+.legend{color:var(--mute);font-size:12px;padding:0 24px}
+.legend i{background:var(--uniq);color:#04140a;font-style:normal;font-weight:700;border-radius:5px;padding:0 5px;font-size:10px}
+.prog{height:4px;background:var(--line);border-radius:3px;margin-top:10px;overflow:hidden}
+.prog div{height:100%;background:var(--acc);transition:width .4s}
+</style>
+</head>
+<body>
+<header>
+  <h1>WellOps Copilot <small>system design</small></h1>
+  <div class="tabs" id="tabs"></div>
+</header>
+<p class="legend">Click any box to read about it, or pick an example and press <b>Next</b> (→ key) to walk through it. <i>UNIQUE</i> marks what we do that a typical LLM app doesn't.</p>
+<main>
+<section id="diagram"><svg id="svg" viewBox="0 0 1530 860" xmlns="http://www.w3.org/2000/svg"></svg></section>
+
+<aside>
+  <div class="who" id="who"></div>
+  <div class="q" id="q"></div>
+  <div class="step" id="step"></div>
+  <h3 id="title">Pick an example →</h3>
+  <div class="body" id="body">Or click any box in the diagram.</div>
+  <div class="why" id="why" hidden></div>
+  <div class="prog"><div id="bar" style="width:0"></div></div>
+  <div class="ctl">
+    <button id="prev">← Back</button>
+    <button id="next" class="primary">Next →</button>
+    <button id="all">Show everything</button>
+  </div>
+</aside>
+</main>
+
+<script>
+const INFO={
+raw:["Raw dataset","600 wells on the test field: weekly inspections (wellhead &amp; air temperature), repair jobs, free-text operator notes, inspection reports, well-type manuals, operations SOPs and approval memos. Messy on purpose: stale statuses, notes that contradict sensors, facts that only exist in report text."],
+ingest:["Ingest pipeline","Loads every file the same way every time (idempotent). Unknown tables become queryable user tables; new manuals have their rules extracted immediately; images are described once by a vision model. Re-running never duplicates rows."],
+substrate:["Substrate (DuckDB)","One database file. Domain meaning lives in SQL views: <code>producing = wellhead − air ≥ the well type's threshold</code>, <code>downtime = 7 days × non-producing weekly inspections</code>. The model never invents these definitions; it reads them."],
+rules:["Rules from manuals","Every threshold and deadline is pulled from a manual or SOP with the exact quote and section. A well type with no rule gets a safe fallback plus a warning flag instead of being silently dropped (a bug our held-out test found)."],
+trust:["Trust layer","24 data traps are turned into data-quality flags (e.g. <code>recorded_status_stale</code>). User corrections are stored as attributed, undoable overlays; originals are never changed. Precedence goes by kind: an explicit correction &gt; sensor/record &gt; AI estimate. A note never overrides a sensor; it is shown next to it."],
+rag:["Docs search (RAG)","Manuals, SOPs, notes and reports are chunked and indexed for keyword and vector search, so answers can quote the exact sentence, e.g. the gas-response deadline from the SOP."],
+user:["User","A named person signs in. Identity decides what private memory they see and who gets credited for corrections."],
+api:["API (AG-UI stream)","Streams standard AG-UI events plus our own: answer, verification, conflict, correctness, usage. Principal, chat and 'today' are injected from the request, so the model cannot pretend to be someone else."],
+cache:["Hot cache","SQLite cache keyed by question + person + date + model. A repeat question replays instantly with fresh handles. Turns that change data (corrections) are never cached."],
+hermes:["Hermes agent harness","Instead of a bare LLM call, the model runs inside the Hermes agent harness: a SOUL (persona + rules of honesty), loaded skills, hooks, its own memories and sessions, and retry control. Score = Eval(Model, Harness, Environment, Budget): we keep the harness fixed and swap models, so the harness, not the model, is what makes answers safe."],
+skills:["Skill library","Before acting, the agent looks up the best playbook (BM25 relevance × past success rate). 9 hand-written skills plus ones learned automatically. Loaded on demand so the prompt stays small and cache-friendly."],
+tools:["Typed tools","Curated tools for common questions plus read-only SQL for new ones. Every tool returns the SQL it ran, citations, data-quality flags, applied overlays and conflicts, not just numbers."],
+memory:["Memory","Two levels. <b>Shared</b>: corrections and rules, scoped (fleet → area → type → well), attributed and undoable, visible to all. <b>Private</b>: your past turns, filtered in SQL by your session identity. Another user can never recall your chat."],
+handles:["Result handles","Large results never pass through the model. It gets a preview and a handle; the UI pulls full rows by handle. Claims in the answer point at a handle + column + row."],
+verifier:["Verifier: 6 hard gates","1 every number / ID must appear in a tool result · 2 every claim is re-executed against its handle · 3 applied overlays &amp; their author must be disclosed · 4 conflicts found by tools must be shown · 5 visual must fit the data · 6 assumptions stated. Fail → the model gets a diff of what's wrong and retries (max 2). Then it fails loudly instead of lying."],
+correct:["Correctness checker","Independent of the model: re-derives the time window from the question, each well's real status, the well→value pairs, list completeness and counts, then compares. Wrong → re-asked with the exact mismatches."],
+judge:["LLM-as-judge","Most teams run a judge offline on a test set. We run it on <b>every live answer</b> with a stronger model (temperature 0): correctness, faithfulness, task completion; reasoning before verdict, 'when in doubt FAIL'. In blocking mode a FAIL re-asks once. Verdicts are cached and logged."],
+ui:["Generative UI","The answer is a typed AnswerSpec: markdown + claims + visuals. The UI renders status cards, tables, maps, threshold line charts, conflict cards, correction diffs with Undo, evidence chains. The X-ray panel shows tools, skills, gates and retries for every turn."],
+langfuse:["Langfuse traces","Each turn is exported as one Langfuse trace with spans for tool calls, gate results and judge scores attached. Eval runs also go to Opik as experiments. Debugging means reading traces, not guessing."],
+distill:["Skill distillation","After a verified turn, the steps are distilled into a reusable playbook (literals → slots), and its success/failure counts update. Bad skills decay and get deprecated. The system gets better the more it's used."],
+evals:["Eval suite","18 golden multi-turn, multi-user episodes with a simulated clock, 72 synthetic cases whose truth is computed from the data, and a mutated dataset as a held-out split. Deterministic scorers: facts, evidence, visual, conflict surfaced, overlay disclosed, and a cross-user leak probe that zeroes the score."],
+meta:["Eval of the evals","We corrupt correct answers 10 ways (wrong number, dropped citation, hidden conflict, leaked entity…) and check each scorer catches its fault: 100% recall, 0% false alarms. The answer key itself is audited: 199 agree, 0 disagree."],
+qa:["QA explorer","Every run is indexed; each failure is classified (grounding, window, visual…); two runs can be compared and regressions block a change."]
+};
+
+const EX={
+q6:{name:"Test set · Q6 conflicting status",who:"Nathan Pierce · production supervisor · test data, today = 15 Jan 2027",
+q:"Across the whole field, not just my area, for which wells do the latest inspection and the operator notes disagree about whether the well is producing oil? For each one, what is its real status right now, and why?",
+steps:[
+["raw","Two sources disagree here: the sensor-based inspection and a human operator note. Both live in the raw data."],
+["ingest","Ingest loaded the test dataset (600 wells) the same way as the sample one. Notes are stored as text, inspections as rows."],
+["rules","'Producing' is not a guess: wellhead − air must be ≥ the type threshold quoted from the manual (e.g. 15 °C for T200, 20 °C for T350)."],
+["trust","The trust layer already flagged note-vs-sensor conflicts. Rule: a note is evidence, it never overrides a reading, so these become 'unconfirmed' instead of silently picking one."],
+["user","Nathan asks. His area is Northwest, but he says 'whole field': the scope must NOT default to his area."],
+["api","The API attaches Nathan as principal and 15 Jan 2027 as today; the model can't change either."],
+["cache","First time asked → cache miss, goes live."],
+["hermes","The Hermes harness gives the model its honesty rules and loads the right playbook."],
+["llm","Gemini 3.8 Flash plans the calls; the harness, not the model, decides what is allowed."],
+["skills","Skill lookup finds the conflict/status playbook: get effective status, pull latest note per well, compare."],
+["tools","Tools run: <code>well_status</code> (latest inspection, delta vs threshold) and docs search over notes. Each returns citations + the conflict list."],
+["rag","Notes are matched to wells; the note text is quoted with date and time as evidence."],
+["handles","Results come back as handles: the model sees a preview, the table rows stay server-side."],
+["verifier","Gates check: every well ID and °C value is in a tool result; the conflicts the tool found are all surfaced (gate 4); 'unconfirmed' is used where the note isn't backed by a reading."],
+["correct","Checker re-derives each named well's status from the data and confirms the list of wells is complete: no missing, no extra."],
+["judgellm","A stronger model (Gemini 4 Argon) is used only to grade, never to answer."],
+["judge","Judge (stronger model) checks faithfulness: nothing hidden or overstated, every column the question asked for is filled."],
+["ui","Table: Well · Area · Latest inspection (ID, date, reading) · Latest note (date, time, quote) · Status now (with 'unconfirmed'). Click a row → evidence drawer."],
+["langfuse","The whole turn, with gate and judge results, lands as one Langfuse trace."],
+["distill","Turn passed, so the steps reinforce the conflict playbook for next time."]
+],
+why:"Most copilots pick one source and sound confident. Ours keeps both, applies the manual's rule, labels the uncertain ones, and a checker + judge confirm before you see it."},
+
+q8:{name:"Test set · Q8 who told you that (memory)",who:"Nathan → Robert → Olivia → Nathan · four sessions",
+q:"Nathan: \"WELL-0333's recalled pump was swapped out yesterday… count it as replaced.\" Then Robert: \"Which recalled pumps are still in the ground?\" Olivia: \"Nathan told me WELL-0577 was swapped too, take it off.\" Nathan: \"Show me recalled pumps still in my area, and install cost.\"",
+steps:[
+["user","Four people, four sessions. The test is whether facts travel to the right people with the right credit."],
+["api","Each session carries its own signed-in principal, so 'who said it' is known by the system, not claimed by the model."],
+["memory","Nathan's correction on WELL-0333 is saved as a <b>shared</b> overlay, attributed to Nathan, undoable. His sort/cost-format preference is saved as <b>private</b>, only for him."],
+["trust","Precedence by kind: an explicit first-hand correction beats the record. Olivia's hearsay about WELL-0577 ('Nathan told me') is stored as an <b>unconfirmed claim</b>, shown next to the data, not applied."],
+["hermes","The harness forbids inventing earlier conversations; if no memory exists it says so."],
+["tools","Robert's turn: recall-list tool runs with overlays applied as of now; WELL-0333 drops off, attributed."],
+["verifier","Disclosure gate: every applied overlay must name its author ('per Nathan Pierce, 16 Jan'). Missing → retry."],
+["correct","Checker confirms the count and the well list against the overlay-applied view."],
+["ui","Turn 5: Nathan's table is sorted by area then ID, costs in $k (his private preference), WELL-0577 shown with an 'unconfirmed claim' note."],
+["evals","This is exactly what our golden episodes test, including a cross-user leak probe that zeroes the score if Robert ever sees Nathan's private preference."],
+["meta","And the leak scorer itself is tested by planting leaks: it catches 100%."]
+],
+why:"Shared corrections with credit + private preferences + hearsay kept as unconfirmed. Most chat memory just stores 'facts' with no author or scope."},
+
+new:{name:"New example · our showcase",who:"Michael Turner · production supervisor, Northeast Production",
+q:"Which wells in Northeast Production does the system still list as active but are actually not producing right now? For each, show the latest reading vs its threshold and any operator note that disagrees, put them on a map, and tell me which one to look at first.",
+steps:[
+["raw","Classic trap: the 'status' column is a stale monthly snapshot. Asking an LLM over the raw table gives the wrong list."],
+["substrate","Our view computes the real status from the latest weekly reading, not the stale column."],
+["rules","Each well's threshold comes from its type's manual, quoted. Different types, different thresholds, all in one answer."],
+["trust","The <code>recorded_status_stale</code> flag marks exactly these wells; any contradicting note is attached as a conflict."],
+["user","Michael asks with three requirements: list, map, and a judgement ('which first')."],
+["cache","Miss → live. Ask it a second time in the demo: it replays instantly from the cache."],
+["hermes","Hermes harness loads Michael's context and the status playbook."],
+["skills","Playbook: effective status → filter by area → join latest note → rank by how long below threshold."],
+["tools","<code>well_status</code> scoped to Northeast; <code>evidence_chain</code> for the top well (inspection → repair → report → note)."],
+["memory","If Michael corrected a well earlier, that overlay is applied and disclosed with his name."],
+["handles","Map and table bind to the same result handle: no copy-paste numbers."],
+["verifier","Visual-fit gate approves a map because he asked; grounding gate checks every °C and well ID; assumptions gate makes it state 'right now = latest inspection as of today'."],
+["correct","Checker re-derives each well's status and the exact set of wells: any extra or missing well → re-ask."],
+["judge","Judge grades the 'which first' judgement for faithfulness: the reason must come from the data shown."],
+["ui","Map of the wells + table (reading, threshold, gap, note) + a recommendation card. X-ray shows tools, gates passed, retries."],
+["sqlite","The verdicts and the answer land in SQLite; that is what makes the repeat question instant."],
+["langfuse","Open Langfuse: one trace with every tool call and the judge's 3 verdicts."],
+["distill","Passed → playbook reinforced; next similar question in any area is faster and more reliable."],
+["qa","Offline, the same behaviour is covered by golden + held-out cases, so a change that breaks it is caught before the demo."]
+],
+why:"It shows the 'stale status' trap, manual-sourced rules, conflict surfacing, a requested map, a grounded judgement, and three independent checks, in one question."}
+};
+
+Object.assign(INFO,{
+voice:["Voice (ElevenLabs)","Answers can be spoken: eleven_v3_conversational, warm voice. IDs and units are read naturally; the data appendix is never read aloud."],
+llm:["Agent LLM (Gemini + fallbacks)","The model the harness drives: Gemini 3.8 Flash, with a fallback chain (OpenRouter free models, local Ollama). Swappable: results are reported per model+harness config."],
+judgellm:["Judge LLM (Gemini 4 Argon)","A deliberately stronger model than the agent, used only for grading. Temperature 0, JSON verdicts, its own fallbacks."],
+sqlite:["SQLite stores","Hot answer cache, chat transcripts, judge verdicts (one row per evaluator) and the internal QA/correctness log. Separate from DuckDB so writes never lock the substrate."],
+mcp:["Skills MCP + REST","The skill library is also exposed as an MCP server (/skills-mcp) and /api/skills, so other agents (e.g. the Hermes agent or Claude) can find and reuse our playbooks."],
+opik:["Opik experiments","Eval runs are pushed as Opik datasets and experiments; each multi-user chat is an Opik thread."],
+vision:["Vision model","Uploaded images are described once by a vision model at ingest, then searchable like text."]
+});
+const X=[30,245,460,675,890,1105,1320],W=185,Y=[45,185,325,465,615,765];
+const N=(c,r,t,sub,k,u)=>[X[c],Y[r],W,t,sub,k,u];
+const NODES={
+ voice:N(0,0,"Voice","ElevenLabs TTS","ext"), vision:N(1,0,"Vision model","describes uploads","ext"), llm:N(3,0,"Agent LLM","Gemini 3.8 Flash + fallbacks","ext"),
+ user:N(0,1,"Chat UI (Next.js)","chat · map · voice"), api:N(1,1,"FastAPI gateway","/api/agui SSE · auth"), cache:N(2,1,"Hot cache","question+user+day"),
+ hermes:N(3,1,"Hermes harness","soul · hooks · retries","",1), skills:N(4,1,"Skill library","BM25 × success rate","",1), tools:N(5,1,"Tool registry","status · spills · sql · docs"),
+ memory:N(6,1,"Memory service","shared + private","",1),
+ ui:N(0,2,"Generative UI","visuals · evidence · X-ray"), handles:N(3,2,"Handle store","full rows by handle"), judge:N(4,2,"LLM-as-judge","every live answer","",0),
+ correct:N(5,2,"Correctness checker","re-derives the facts","",1), verifier:N(6,2,"Verifier (6 gates)","re-runs every claim","",1),
+ langfuse:N(2,3,"Langfuse","one trace per turn","ext"), sqlite:N(3,3,"SQLite","cache · verdicts · QA log","store"), judgellm:N(4,3,"Judge LLM","Gemini 4 Argon","ext"),
+ mcp:N(5,3,"Skills MCP / REST","share playbooks"), distill:N(6,3,"Skill distiller","learns from passed turns","",1),
+ raw:N(0,4,"Raw files","CSV · notes · manuals","store"), ingest:N(1,4,"Ingest pipeline","idempotent · uploads"), substrate:N(2,4,"Canonical views","DuckDB, rules as SQL","store"),
+ rules:N(3,4,"Rules from manuals","verbatim quotes","store",1), trust:N(4,4,"Trust layer","dq flags · overlays","store",1), rag:N(5,4,"Docs index (RAG)","FTS + embeddings","store"),
+ meta:N(1,5,"Meta-eval","fault injection","",1), evals:N(2,5,"Eval runner","golden · synthetic · held-out"), qa:N(3,5,"QA explorer","regression gate"), opik:N(4,5,"Opik","experiments","ext")
+};
+const H=62;
+const ZONES=[[15,Y[0]-28,1500,H+42,"1 ·  External AI services"],[15,Y[1]-28,1500,H+42,"2 ·  Ask: request → agent → tools → memory"],[15,Y[2]-28,1500,H+42,"3 ·  Check & show: verify → correctness → judge → UI   (right to left)"],
+ [15,Y[3]-28,1500,H+42,"4 ·  Observability & self-improvement"],[15,Y[4]-28,1500,H+42,"5 ·  Data layer (built once by ingest)"],[15,Y[5]-28,1500,H+42,"6 ·  Offline evaluation"]];
+const EDGES=[["voice","user","speech"],["user","api","ask"],["api","cache","lookup"],["cache","hermes","miss"],["llm","hermes","reasoning"],["hermes","skills","find playbook"],["skills","tools","call tools"],["tools","memory","+ memory"],
+ ["memory","verifier","draft answer"],["verifier","correct","pass"],["correct","judge","pass"],["judge","handles","answer"],["handles","ui","rows"],["ui","user","renders"],
+ ["judge","judgellm","grade"],["verifier","distill","verified turn"],
+ ["raw","ingest","load"],["ingest","substrate","tables"],["substrate","rules",""],["rules","trust",""],["trust","rag",""],
+ ["meta","evals","plants faults"],["evals","qa","runs"],["qa","opik",""],
+ ["tools","substrate","read-only SQL",1],["tools","trust","flags, conflicts",1],["tools","rag","search",1],["tools","rules","thresholds",1],["memory","trust","overlays",1],["verifier","hermes","retry (≤2)",1],
+ ["hermes","langfuse","trace",1],["judge","langfuse","scores",1],["judge","sqlite","verdicts",1],["cache","sqlite","stored",1],["distill","skills","new playbook",1],["mcp","skills","",1],
+ ["ingest","vision","images",1],["api","ingest","uploads",1],["evals","api","drives live",1],["evals","substrate","truth",1],["tools","handles","rows",1]];
+const NS='http://www.w3.org/2000/svg',svg=document.getElementById('svg');
+const mk=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e};
+mk('defs',{}).innerHTML='<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#8b949e"/></marker>';
+ZONES.forEach(([x,y,w,h,l])=>{const g=mk('g',{class:'zone'});mk('rect',{x,y,width:w,height:h,rx:12},g);if(l)mk('text',{x:x+12,y:y+18},g).textContent=l;});
+const C=id=>{const [x,y,w]=NODES[id];return [x+w/2,y+H/2,w/2,H/2]};
+function clip([cx,cy,hw,hh],[tx,ty]){const dx=tx-cx,dy=ty-cy;const s=Math.min(hw/Math.abs(dx||1e-9),hh/Math.abs(dy||1e-9));return [cx+dx*s,cy+dy*s];}
+const edgeEls=EDGES.map(([a,b,l,sec])=>{const g=mk('g',{class:'edge'+(sec?' sec':'')});const A=C(a),B=C(b);const p1=clip(A,B),p2=clip(B,A);
+ mk('line',{x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],'marker-end':'url(#ar)'},g);
+ if(l&&Math.hypot(p2[0]-p1[0],p2[1]-p1[1])>70){const t=mk('text',{x:(p1[0]+p2[0])/2+4,y:(p1[1]+p2[1])/2-4},g);t.textContent=l;}g.dataset.a=a;g.dataset.b=b;return g;});
+Object.entries(NODES).forEach(([id,[x,y,w,t,s,k,u]])=>{const g=mk('g',{class:'box '+(k||'')});g.dataset.id=id;
+ mk('rect',{class:'b',x,y,width:w,height:H,rx:10},g);mk('text',{class:'t',x:x+12,y:y+26},g).textContent=t;mk('text',{class:'s',x:x+12,y:y+45},g).textContent=s;
+ if(u){const ug=mk('g',{class:'u'},g);mk('rect',{x:x+w-58,y:y-8,width:54,height:15,rx:5},ug);mk('text',{x:x+w-53,y:y+3},ug).textContent='UNIQUE';}});
+const boxes=[...svg.querySelectorAll('.box')];
+const $=id=>document.getElementById(id);
+let cur=null, i=-1;
+
+const tabs=$('tabs');
+Object.entries(EX).forEach(([k,e])=>{const b=document.createElement('button');b.textContent=e.name;b.onclick=()=>start(k);b.dataset.k=k;tabs.appendChild(b)});
+
+function hl(id,seen){
+  document.body.classList.add('focus');
+  const nb=new Set();
+  edgeEls.forEach(e=>{const on=e.dataset.a===id||e.dataset.b===id;e.classList.toggle('on',on);if(on){nb.add(e.dataset.a);nb.add(e.dataset.b);}});
+  boxes.forEach(b=>{const d=b.dataset.id;b.classList.toggle('hl',d===id);b.classList.toggle('nb',nb.has(d)&&d!==id);b.classList.toggle('seen',seen.includes(d)&&d!==id)});
+}
+function start(k){cur=k;i=-1;[...tabs.children].forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+  $('who').textContent=EX[k].who;$('q').textContent=EX[k].q;$('q').hidden=false;$('why').hidden=true;
+  $('title').textContent='Ready';$('body').innerHTML='Press <b>Next →</b> to follow this question through the system.';$('step').textContent='';$('bar').style.width='0';
+  document.body.classList.remove('focus');(boxes.forEach(b=>b.classList.remove('hl','seen','nb')),edgeEls.forEach(e=>e.classList.remove('on')));}
+function go(d){
+  if(!cur){start('q6');}
+  const s=EX[cur].steps; i=Math.max(0,Math.min(s.length,i+d));
+  if(i===s.length){document.body.classList.remove('focus');(boxes.forEach(b=>b.classList.remove('hl','seen','nb')),edgeEls.forEach(e=>e.classList.remove('on')));
+    $('title').textContent='Why this is strong';$('body').innerHTML='All stages it touched are now back in view.';$('why').hidden=false;$('why').textContent=EX[cur].why;$('step').textContent='Done';$('bar').style.width='100%';return;}
+  const [id,txt]=s[i];$('why').hidden=true;
+  hl(id,s.slice(0,i).map(x=>x[0]));
+  $('step').textContent=`Step ${i+1} of ${s.length}`;$('title').textContent=INFO[id][0];
+  $('body').innerHTML=`<p>${txt}</p><p style="color:var(--mute);font-size:12.5px">${INFO[id][1]}</p>`;
+  $('bar').style.width=((i+1)/s.length*100)+'%';
+}
+boxes.forEach(b=>b.onclick=()=>{const id=b.dataset.id;
+  if(cur){const s=EX[cur].steps;const j=s.findIndex(x=>x[0]===id);if(j>=0){i=j-1;go(1);return;}}
+  hl(id,[]);$('step').textContent='Component';$('title').textContent=INFO[id][0];$('body').innerHTML=INFO[id][1];$('why').hidden=true;});
+$('next').onclick=()=>go(1);$('prev').onclick=()=>go(-1);
+$('all').onclick=()=>{document.body.classList.remove('focus');(boxes.forEach(b=>b.classList.remove('hl','seen','nb')),edgeEls.forEach(e=>e.classList.remove('on')));};
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(1);if(e.key==='ArrowLeft')go(-1);if(e.key==='Escape')$('all').click();});
+$('q').hidden=true;
+</script>
+</body>
+</html>

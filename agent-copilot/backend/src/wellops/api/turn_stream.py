@@ -18,7 +18,7 @@ from wellops.tools.core import store
 from wellops.verify.gates import MAX_RETRIES, verify
 
 from .native_agent import run_native
-from wellops.qa import correctness
+from wellops.qa import correctness, judge
 
 PROVIDERS = {  # provider -> (OpenAI-compatible base_url, default model, settings attr holding the key)
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.8-flash", "gemini_api_key"),  # LLM_MODEL=gemini-4-argon for max quality (45-53 s/turn)
@@ -27,6 +27,49 @@ BASE_URL, _DEFAULT_MODEL, _KEY_ATTR = PROVIDERS[settings.llm_provider]
 MODEL = settings.llm_model or _DEFAULT_MODEL
 FAST = {"reasoning_effort": "none", "temperature": 0.2}  # no hidden reasoning: answers are short and tool-grounded
 HISTORY: dict[str, list] = {}  # chat_id -> agent message history
+TURN_BUDGET_S = 180  # hard cap on one turn (all attempts); past it the answer is written from the data already fetched
+SALVAGE_S = 40  # reserved for that final no-tools answer
+
+
+def _prefs(deps: RunDeps) -> str:
+    """This user's own saved preferences ("just for me: sort by area, costs in $k"): applied in every session of theirs only."""
+    from wellops.tools.core import get_db
+    try:
+        rows = get_db().rows("""SELECT coalesce(value_text, reason) p FROM assertions WHERE dataset_id=? AND author_user_id=?
+                                AND (scope_key=? OR lower(coalesce(reason, '')) LIKE '%preference%' OR lower(coalesce(target_attr, '')) LIKE '%format%')
+                                AND status NOT IN ('undone', 'superseded') ORDER BY tx_time""",
+                             [deps.active_dataset, deps.principal, deps.principal])
+    except Exception:  # noqa: BLE001
+        return ""
+    if not rows:
+        return ""
+    return ("\nThis user's saved preferences (apply them to every list and table you show them, and say you did): "
+            + "; ".join(dict.fromkeys(r["p"] for r in rows)))
+
+
+async def _salvage(question: str, system: str, tool_texts: list[str], draft: str) -> str:
+    """One no-tools call: answer the question from the tool results already fetched (the agent ran out of time/calls)."""
+    import httpx
+    data = "\n\n".join(t[:6000] for t in tool_texts[-12:])[:60000]
+    msgs = [{"role": "system", "content": system + "\nYou can no longer call tools. Answer now, only from the tool results "
+             "below. Lead with the direct answer; use a markdown table when the question asks for a list or table. If a part "
+             "cannot be answered from these results, say exactly which part."},
+            {"role": "user", "content": f"Question: {question}\n\nTool results:\n{data}\n\nDraft so far (may be empty):\n{draft[:4000]}"}]
+    import asyncio
+    try:
+        async with httpx.AsyncClient(timeout=SALVAGE_S) as c:
+            for i in range(3):  # a rate limit (429) or a 5xx is retried with backoff
+                r = await c.post(f"{BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {getattr(settings, _KEY_ATTR)}"},
+                                 json={"model": MODEL, "temperature": 0.2, "messages": msgs, **({"reasoning_effort": "none"} if "gemini" in MODEL else {})})
+                if r.status_code in (429, 500, 502, 503, 504) and i < 2:
+                    await asyncio.sleep(2 + 3 * i)
+                    continue
+                r.raise_for_status()
+                return r.json()["choices"][0]["message"]["content"] or draft
+    except Exception as e:  # noqa: BLE001
+        import logging
+        logging.getLogger("wellops").warning("salvage failed: %s: %s", type(e).__name__, str(e)[:300])
+        return draft or "I ran out of time before finishing this answer. The data I fetched is in Show work; please ask a narrower question."
 
 SYSTEM = """You are WellOps, an oil-field asset copilot. Today is {today}; the user is {principal}.
 Rules:
@@ -34,6 +77,10 @@ Rules:
   names, IDs (WELL-, INS-, MNT-, CTX-, REG-), dates and numbers exactly as the tools return them. No preamble.
   Refer to wells by ID and to areas, teams and people by name.
 - Every number you state must come from a WellOps tool result in this turn. Never guess.
+- Answer EVERY part of the question: "when ... and by whom" needs the date AND the person's name; "why" needs the
+  reason; a list needs every item. If a part cannot be answered from the data, say exactly which part and why.
+- Say where each fact came from (inspection, repair report, operator note, SOP/memo, or a user's correction with
+  their name). A user's statement that no record backs is reported as "unconfirmed (said by <name>)".
 - Resolve areas and relative periods ("last 4 months") with resolve_entity first, then call the data tool.
 - After getting data, call show_visual with the result handle. If the question names a visual (card, table, chart,
   map, heatmap) use exactly that. Otherwise: one well right now -> status_card; a list of wells, events, spills,
@@ -43,9 +90,31 @@ Rules:
   they changed and their reason verbatim. Then report per field: applied / needs confirmation / rejected (why), and
   name any note that disagrees. After an applied correction, re-run the affected query (well_status or obligations)
   and state the consequence (e.g. "WELL-0164 is now producing", "now a reportable spill: SR-01 notice overdue").
+- If the user contradicts your previous answer ("no there wasn't", "that's wrong, it was 41 C", "it didn't spill"),
+  that IS a correction: call propose_correction on the record id from that answer ({{"spill": false}} for a spill
+  that did not happen) with their words as the reason. It is stored immediately and every later answer uses it.
+- Speak plainly about corrections: never say "overlay", "applied_overlays" or an A- id. Say e.g. "Corrected by Jake
+  Morales on 15 Jan: wellhead 29.9 °C → 22.0 °C (re-measured on site; the drone caught sun glare). With that value the
+  well is NOT producing." Whenever an answer uses a corrected value, name the well, who corrected it, old → new value.
+- Never mention tool names or handles (r1, gas_response_check) in the answer.
 - Status statements about a well ("it's running", "shut in since 14 Oct") also go to propose_correction as
   {{"producing": ...}}; planned work, shared facts and rules go to remember_correction.
 - If notes and sensor data disagree, say so plainly and name both sources.
+- SOP rule questions have exact tools; call them FIRST and do not rebuild them with sql: gas reports / response
+  deadlines -> gas_response_check; temporary flowline bypasses / MOC approvals -> bypass_check; inspection vs operator
+  notes disagree / "which status is right" -> status_conflicts; recalled pumps still in the ground (and install cost)
+  -> recalled_pumps (team id like TEAM-NW, or area name); shut in longer than the repair / what we wait on ->
+  shut_in_waits (show it as a table AND a stacked bar); cold weather / heat trace / freeze -> freeze_check; a regulator letter about spill clean-up -> read
+  it with search_knowledge, then spill_cleanup_compliance with its areas, date, volume and required sentence.
+  Show their handle as a table. Each row says its source; repeat that in the answer.
+- Data that does not exist (e.g. reservoir pressure, oil volumes) -> say so in one sentence and offer the closest
+  measure the data has. Never invent it.
+- Never call the same tool with the same arguments twice in one turn.
+- A measurement asked about an event (e.g. "the H2S reading for the 3 Dec gas report") must come from a record made
+  AFTER that event on that well (a job or manual inspection responding to it). If none exists, say no reading was
+  taken because nobody responded; never quote an older reading as the answer.
+- Before saying an area/region "runs hotter", "fails more", etc., compare like with like (same well type) and say if
+  the difference is only the well-type mix; ambient air and wellhead temperature are different things.
 - For what a manual, SOP, repair report or note says, call search_knowledge and quote the passage with its source.
 - For "why" questions use the reason_summary from well_status or call evidence_chain on the inspection id, and
   name the repair or note behind the reason (MNT-/CTX- id).
@@ -156,7 +225,7 @@ def _typed(visuals: list[Visual]) -> list[Visual]:
 
 async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[dict]:
     history = HISTORY.get(deps.chat_id, [])
-    system = SYSTEM.format(today=deps.today, principal=deps.principal)
+    system = SYSTEM.format(today=deps.today, principal=deps.principal) + _prefs(deps)
     headers = {"X-User-Id": deps.principal, "X-Chat-Id": deps.chat_id, "X-Clock-Today": str(deps.today)}
     ask, attempts, spec, final_msgs = message, [], None, history
     tool_texts: list[str] = []  # every raw tool result this turn, so evidence numbers count as grounded
@@ -164,10 +233,13 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
     verdict = None
     mcp_server.UI_QUEUE.pop(deps.chat_id, None)
     mcp_server.TOOL_LOG.pop(deps.chat_id, None)
+    import time as _t
+    t_end = _t.monotonic() + TURN_BUDGET_S
     for attempt in range(MAX_RETRIES + 1):
         req = dict(message=ask, history=final_msgs, system=system, headers=headers,
                    model=MODEL, api_key=getattr(settings, _KEY_ATTR), base_url=BASE_URL, provider=settings.llm_provider,
-                   request_overrides=FAST)
+                   request_overrides=FAST, deadline=t_end - SALVAGE_S)
+        out_of_budget = False
         mid, text, err = f"m-{uuid.uuid4().hex[:8]}", "", None
         yield ({"type": "TEXT_MESSAGE_START", "messageId": mid, "role": "assistant"})
         async for ev in run_native(deps, req):
@@ -188,6 +260,14 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
                 final_msgs = ev.get("messages") or final_msgs
             elif k == "error":
                 err = ev["message"]
+            elif k == "budget":
+                out_of_budget = True
+        if out_of_budget:  # loop or time cap hit: write the answer from what was fetched, no more tools
+            text = await _salvage(message, system, tool_texts, text)
+            from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+            final_msgs = [*(history or []), ModelRequest(parts=[UserPromptPart(content=message)]),
+                          ModelResponse(parts=[TextPart(content=text)])]  # follow-ups in this chat still see this turn
+            yield ({"type": "TEXT_MESSAGE_CONTENT", "messageId": mid, "delta": text})
         yield ({"type": "TEXT_MESSAGE_END", "messageId": mid})
         if not err and re.match(r"API call failed|HTTP 4\d\d|Rate limit", text.strip()):
             err = text.strip()[:300]  # provider failure surfaced as text: never present it as an answer
@@ -206,8 +286,10 @@ async def _live_turn(deps: RunDeps, message: str, state: dict) -> AsyncIterator[
             v.ok = False
         verdict = correctness.check(deps, message, spec.markdown, results, tool_args)  # right or wrong vs the data
         correctness.log(deps, message, verdict, attempt, MODEL)
+        judge.apply(v, await judge.on_answer(deps, message, spec, results, tool_texts))  # LLM judge (async: logged only)
         attempts.append(v)
-        if (v.ok and verdict.verdict != "incorrect") or attempt == MAX_RETRIES:
+        if (v.ok and verdict.verdict != "incorrect") or attempt == MAX_RETRIES or out_of_budget \
+                or _t.monotonic() > t_end - SALVAGE_S - 30:  # no time left for another attempt: deliver this one
             break
         problems = [p for p in (v.diff() if not v.ok else "", verdict.mismatches() if verdict.verdict == "incorrect" else "") if p]
         ask = ("Your answer is wrong or unsupported. Fix exactly these, calling tools again if needed (for a period like "
@@ -254,6 +336,7 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
         spec = next((e["value"] for e in events if e.get("name") == "wellops.answer"), None)
         if spec:
             record(deps, message, AnswerSpec.model_validate(spec))
+        cache.save_chat_turn(deps.chat_id, deps.principal, message, events)
         yield _sse({"type": "RUN_FINISHED", "threadId": thread_id, "runId": run_id})
         return
     state: dict = {}
@@ -289,4 +372,8 @@ async def stream_turn(deps: RunDeps, message: str, thread_id: str, run_id: str) 
                    {v.handle for v in sp.visuals if v.handle} | {c.handle for c in sp.claims}
                    if (st := store().get(deps.chat_id, h))}
         cache.put_turn(key, message, {"events": [*events, trace], "handles": handles}, ms)
+    try:
+        cache.save_chat_turn(deps.chat_id, deps.principal, message, [*events, trace])
+    except Exception:  # noqa: BLE001  the transcript must never break a turn
+        pass
     yield _sse({"type": "RUN_FINISHED", "threadId": thread_id, "runId": run_id})

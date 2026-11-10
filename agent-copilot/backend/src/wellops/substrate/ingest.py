@@ -120,6 +120,13 @@ def ingest(data_dir: Path, ds: str, con: duckdb.DuckDBPyConnection) -> dict:
     docs = []
     for doc_id, rel in cfg["docs"].items():
         docs += [(ds, doc_id, rel, *s) for s in split_sections((data_dir / rel).read_text())]
+    for p in sorted((data_dir / "fleet/sops").glob("*.md")):  # every SOP, memo, notice and letter, not only the known ones
+        rel = str(p.relative_to(data_dir))
+        if rel not in cfg["docs"].values():
+            text = p.read_text()
+            m = re.search(r"Document ID:\s*([\w-]+)|\b(MOC-\d{4}-\d+)\b|Reference:\*\*\s*([\w-]+)", text)
+            doc_id = next((g for g in (m.groups() if m else ()) if g), p.stem.upper())
+            docs += [(ds, doc_id, rel, *s) for s in split_sections(text)]
     rules, inherits = list(cfg["rules"]), dict(cfg.get("inherits", {}))
     late_flags = []
     for p in sorted((data_dir / "fleet/well-types").glob("*.md")):  # new manuals in test data still load

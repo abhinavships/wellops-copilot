@@ -23,6 +23,14 @@ export async function fetchUsers(): Promise<User[]> {
   return Array.isArray(j) ? j : j.users;
 }
 
+export interface ServerTurn { question: string; events: unknown[]; text?: string; at?: number }
+/** A chat's transcript kept by the server (chats opened from another browser, or run by the evals). */
+export async function fetchChatTurns(chatId: string, principal: string): Promise<ServerTurn[]> {
+  if (MOCK) return [];
+  const j = await getJson<{ turns: ServerTurn[] }>(`/api/chats/${encodeURIComponent(chatId)}/turns?principal=${encodeURIComponent(principal)}`);
+  return j.turns ?? [];
+}
+
 export async function fetchChats(principal: string): Promise<ChatSummary[]> {
   if (MOCK) return [];
   const j = await getJson<{ chats: ChatSummary[] } | ChatSummary[]>(`/api/chats?principal=${encodeURIComponent(principal)}`);

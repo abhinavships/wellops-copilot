@@ -16,8 +16,10 @@ def test_constraints_reject_nonsense_and_explain_computed_fields():
     assert "finite" in check("ambient_temp_c", "infinity")[2] or "must be a number" in check("ambient_temp_c", "infinity")[2]
 
 
-def test_multi_field_edit_without_reason_is_checked_per_field_and_waits(deps):
-    """The user's row edit: 25.6 -> 22.6, 25.6 -> 3000.6, delta 3.2 -> 1.2.2, threshold 15 -> infinity, no reason."""
+def test_multi_field_edit_without_reason_is_checked_per_field_and_waits(deps, monkeypatch):
+    """(feedback_commits off) The user's row edit: 25.6 -> 22.6, 25.6 -> 3000.6, delta 3.2 -> 1.2.2, threshold 15 -> infinity, no reason."""
+    from wellops.settings import settings
+    monkeypatch.setattr(settings, "feedback_commits", False)
     d = deps("U-201", "multi")
     r = propose_correction(d, "INS-0001-0203", {"wellhead_temp_c": "22.6", "wellhead_recorded_c": "3000.6",
                                                 "delta_c": "1.2.2", "threshold": "infinity"}, "this data is wrong")
@@ -29,6 +31,15 @@ def test_multi_field_edit_without_reason_is_checked_per_field_and_waits(deps):
     out = resolve_dispute(d, r["dispute_id"], "correct")  # only the one valid pending change is applied
     assert out["status"] == "corrected" and [c["status"] for c in out["changes"]].count("applied") == 1
     assert chat_assertions() == 1
+
+
+def test_unjustified_correction_commits_now_by_default(deps):
+    """"No, there wasn't a spill": the user's word is stored at once (attributed, undoable), so every later answer uses it."""
+    d = deps("U-201", "nospill")
+    r = propose_correction(d, "INS-0097-0201", {"spill": False}, "no there wasn't")
+    assert r["changes"][0]["status"] == "applied"
+    a = get_db().rows("SELECT kind, target_attr, value_num, author_user_id FROM assertions WHERE source='chat'")
+    assert a and a[0]["kind"] == "detection_correction" and a[0]["value_num"] == 0.0 and a[0]["author_user_id"] == "U-201"
 
 
 def test_justified_correction_applies_now_and_shows_conflict(deps):

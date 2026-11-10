@@ -52,7 +52,12 @@ def _out(ctx: Context, fn, *a, **k) -> str:
     if hasattr(r, "handle"):
         TOOL_LOG.setdefault(deps.chat_id, []).append(r)
         d = r.model_dump(mode="json")
-        d["preview"] = d.get("preview", [])[:PREVIEW_ROWS]
+        if d.get("row_count", 0) > 40:  # small results go to the model whole: counts are never read off a preview
+            d["preview"] = d.get("preview", [])[:PREVIEW_ROWS]
+        else:
+            from wellops.tools.core import store
+            st = store().get(deps.chat_id, r.handle)
+            d["preview"] = st.rows if st else d.get("preview", [])
         d["citations"] = d.get("citations", [])[:15]
         return json.dumps(d, default=str)
     return json.dumps(r.model_dump(mode="json") if hasattr(r, "model_dump") else r, default=str)
@@ -160,6 +165,63 @@ def get_skill(ctx: Context, skill_id: str) -> str:
     """One playbook by id (from find_skills): full steps, pitfalls and example questions."""
     from wellops import skills
     return json.dumps(skills.get_skill(skill_id) or {"error": f"unknown skill {skill_id!r}"}, default=str)
+
+
+@mcp.tool()
+def gas_response_check(ctx: Context, since: str = "2026-11-01") -> str:
+    """Operations SOP OPS-1: every operator-note gas report (smell, rotten egg, odor, H2S alarm) since a date, the first
+    field response (maintenance start or MANUAL inspection), hours to it, the deadline and Met/Missed. Use for gas reports."""
+    from wellops.tools import sop_rules
+    return _out(ctx, sop_rules.gas_response, since)
+
+
+@mcp.tool()
+def bypass_check(ctx: Context) -> str:
+    """Operations SOP OPS-2: every temporary flowline bypass (in/out dates from operator notes) against the MOC memos,
+    with approval, expiry and Allowed/Expired/Not approved; in_place_now marks the ones still in."""
+    from wellops.tools import sop_rules
+    return _out(ctx, sop_rules.bypasses)
+
+
+@mcp.tool()
+def status_conflicts(ctx: Context) -> str:
+    """Operations SOP OPS-3: wells whose latest inspection and latest shut-in/restart operator note disagree, with the
+    real status now and why. Use for 'which status is right' / inspection vs operator notes questions."""
+    from wellops.tools import sop_rules
+    return _out(ctx, sop_rules.status_conflicts)
+
+
+@mcp.tool()
+def recalled_pumps(ctx: Context, team: str | None = None) -> str:
+    """Supplier recall: wells whose pump in the ground TODAY is from a recalled lot (latest 'Parts installed'), with area,
+    team, install job, install cost and any user statements about the well (attributed). team: team id or area name."""
+    from wellops.tools import sop_rules
+    return _out(ctx, sop_rules.recalled_pumps, team)
+
+
+@mcp.tool()
+def spill_cleanup_compliance(ctx: Context, areas: list[str] | None = None, since: str = "2026-06-01", min_bbl: float = 5.0,
+                             required: str = "Soil samples sent to the lab.") -> str:
+    """Regulator letters about spill clean-up: reportable spills in the given areas (names) since a date, their clean-up
+    job and whether its report contains the required sentence (Compliant Yes/No with reason). Read the letter first for
+    the areas, date, volume and sentence."""
+    from wellops.tools import sop_rules
+    return _out(ctx, sop_rules.spill_cleanup_compliance, areas, since, min_bbl, required)
+
+
+@mcp.tool()
+def shut_in_waits(ctx: Context, start: str = "2026-01-01", end: str | None = None) -> str:
+    """Why wells stay shut in longer than the repair: per area and reason (parts, weather, crews, contractors, pipeline
+    tie-in, none recorded), share of jobs and typical extra days, for jobs started in [start, end]."""
+    from wellops.tools import sop_rules
+    return _out(ctx, sop_rules.shut_in_waits, start, end)
+
+
+@mcp.tool()
+def freeze_check(ctx: Context, start: str = "2026-12-01", end: str = "2026-12-31") -> str:
+    """Operations SOP OPS-5 cold weather: cold producing readings and whether the heat trace check followed in time."""
+    from wellops.tools import sop_rules
+    return _out(ctx, sop_rules.freeze_checks, start, end)
 
 
 @mcp.tool()

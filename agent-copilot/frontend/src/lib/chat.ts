@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AguiEvent, AnswerSpec, CapabilityEvent, Conflict, ToolResult, UsageEvent, VerificationEvent } from "@/contracts";
 import { runAgent, uid } from "@/lib/agui";
-import type { Ctx } from "@/lib/api";
+import { fetchChatTurns, type Ctx } from "@/lib/api";
 
 export interface ToolCall {
   id: string; name: string; argsText: string; startedAt: number; endedAt?: number;
@@ -14,6 +14,7 @@ export interface Turn {
   status: "running" | "done" | "error"; error?: string; startedAt: number; endedAt?: number;
   stateDeltas: unknown[][];
   trace?: RunTrace; cache?: { hit: boolean; ms: number; saved_ms?: number };
+  draft?: string; // text of the attempt in progress: shown only when the run ends (a rejected draft never flashes)
 }
 export interface TraceStep { name: string; ms: number; ok: boolean; detail?: string }
 export interface RunTrace { steps: TraceStep[]; total_ms: number }
@@ -29,9 +30,9 @@ function saveTurns(chatId: string, turns: Turn[]) {
 export function reduceEvent(t: Turn, ev: AguiEvent, now = Date.now()): Turn {
   switch (ev.type) {
     // A verifier retry streams a fresh message; show the latest attempt, not all of them glued together.
-    case "TEXT_MESSAGE_START": return { ...t, text: "" };
-    case "TEXT_MESSAGE_CONTENT": return { ...t, text: t.text + ev.delta };
-    case "TEXT_MESSAGE_CHUNK": return ev.delta ? { ...t, text: t.text + ev.delta } : t;
+    case "TEXT_MESSAGE_START": return { ...t, draft: "" };
+    case "TEXT_MESSAGE_CONTENT": return { ...t, draft: (t.draft ?? "") + ev.delta };
+    case "TEXT_MESSAGE_CHUNK": return ev.delta ? { ...t, draft: (t.draft ?? "") + ev.delta } : t;
     case "TOOL_CALL_START":
       return { ...t, tools: [...t.tools, { id: ev.toolCallId, name: ev.toolCallName, argsText: "", startedAt: now, status: "running" }] };
     case "TOOL_CALL_ARGS":
@@ -44,7 +45,7 @@ export function reduceEvent(t: Turn, ev: AguiEvent, now = Date.now()): Turn {
     case "STATE_DELTA": return { ...t, stateDeltas: [...(t.stateDeltas ?? []), ev.delta] };
     case "CUSTOM": {
       switch (ev.name) {
-        case "wellops.answer": return { ...t, answer: ev.value as AnswerSpec };
+        case "wellops.answer": { const a = ev.value as AnswerSpec; return { ...t, answer: a, text: a.markdown ?? t.draft ?? t.text }; }
         case "wellops.verification": return { ...t, verification: ev.value as VerificationEvent };
         case "wellops.capability": return { ...t, capabilities: [...t.capabilities, ev.value as CapabilityEvent] };
         case "wellops.conflict": return { ...t, conflicts: [...t.conflicts, ev.value as Conflict] };
@@ -54,14 +55,15 @@ export function reduceEvent(t: Turn, ev: AguiEvent, now = Date.now()): Turn {
         default: return t;
       }
     }
-    case "RUN_ERROR": return { ...t, status: "error", error: ev.message, endedAt: now };
-    case "RUN_FINISHED": return { ...t, status: t.status === "error" ? "error" : "done", endedAt: now };
+    case "RUN_ERROR": return { ...t, status: "error", error: ev.message, endedAt: now, text: t.text || t.draft || "" };
+    case "RUN_FINISHED": return { ...t, status: t.status === "error" ? "error" : "done", endedAt: now, text: t.text || t.draft || "" };
     default: return t;
   }
 }
 
 export function useChat(ctx: Ctx) {
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [turnsChat, setTurnsChat] = useState<string>(""); // which chat `turns` belongs to (lags one render on a switch)
   const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const turnsRef = useRef<Turn[]>([]);
@@ -69,15 +71,30 @@ export function useChat(ctx: Ctx) {
   ctxRef.current = ctx;
 
   const commit = useCallback((next: Turn[], persist: boolean) => {
-    turnsRef.current = next; setTurns(next);
+    turnsRef.current = next; setTurns(next); setTurnsChat(ctxRef.current.chatId);
     if (persist) saveTurns(ctxRef.current.chatId, next);
   }, []);
 
   // Switch chat: abort any run and load stored turns.
   useEffect(() => {
     abortRef.current?.abort(); setBusy(false);
-    commit(loadTurns(ctx.chatId), false);
-  }, [ctx.chatId, commit]);
+    const local = loadTurns(ctx.chatId);
+    commit(local, false);
+    if (local.length) return;
+    let live = true; // nothing in this browser: rebuild the chat from the server's transcript
+    fetchChatTurns(ctx.chatId, ctx.userId).then((st) => {
+      if (!live || !st.length || turnsRef.current.length) return;
+      const now = Date.now();
+      const rebuilt = st.map((x, i): Turn => {
+        let t: Turn = { id: `${ctx.chatId}-${i}`, userText: x.question, text: x.text ?? "", tools: [], capabilities: [], conflicts: [],
+          status: "done", startedAt: (x.at ?? now / 1000) * 1000, stateDeltas: [] };
+        for (const ev of x.events as AguiEvent[]) t = reduceEvent(t, ev, t.startedAt);
+        return { ...t, status: t.status === "running" ? "done" : t.status };
+      });
+      commit(rebuilt, true);
+    }).catch(() => { /* backend offline: start empty */ });
+    return () => { live = false; };
+  }, [ctx.chatId, ctx.userId, commit]);
 
   const send = useCallback(async (text: string, scenario?: string) => {
     const c = ctxRef.current;
@@ -109,5 +126,5 @@ export function useChat(ctx: Ctx) {
   }, [commit]);
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
-  return { turns, busy, send, stop, addLocal };
+  return { turns, turnsChat, busy, send, stop, addLocal };
 }

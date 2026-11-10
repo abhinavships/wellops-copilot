@@ -32,6 +32,7 @@ from .voice import router; app.include_router(router)  # noqa: E402, E702
 from .ingest_api import router as ingest_router; app.include_router(ingest_router)  # noqa: E402, E702
 from .media_gen_api import router as media_gen_router; app.include_router(media_gen_router)  # noqa: E402, E702
 from .canvases import router as canvases_router; app.include_router(canvases_router)  # noqa: E402, E702
+from .geo import router as geo_router; app.include_router(geo_router)  # noqa: E402, E702  /api/wells/locations
 from .skills_api import install as _skills; _skills(app)  # noqa: E402, E702  /api/skills + /skills-mcp
 
 HISTORY: dict[str, list[ModelMessage]] = {}  # chat_id -> full pydantic-ai message history (server owns the transcript)
@@ -162,6 +163,18 @@ def chats(principal: str) -> dict:
     return {"chats": rows}
 
 
+@app.get("/api/chats/{chat_id}/turns")
+def chat_turns(chat_id: str, principal: str) -> dict:
+    """A chat's transcript (AG-UI events per turn). Chats from before transcripts were kept fall back to their episodes."""
+    from wellops import cache
+    turns = cache.chat_turns(chat_id, principal)
+    if not turns:
+        eps = get_db().rows("SELECT utterance, summary, ts FROM episodes WHERE chat_id=? AND principal=? AND NOT forgotten ORDER BY ts",
+                            [chat_id, principal])
+        turns = [{"question": e["utterance"], "text": e["summary"] or "", "events": []} for e in eps]
+    return {"turns": turns}
+
+
 @app.post("/api/assertions/{assertion_id}/undo")
 def undo(assertion_id: str, request: Request) -> dict:
     try:
@@ -195,10 +208,17 @@ async def resolve(dispute_id: str, request: Request) -> dict:
         raise HTTPException(400, str(e)) from e
 
 
+@app.get("/api/judge")
+def judge_summary(last: int = 200, verdict: str | None = None, evaluator: str | None = None, limit: int = 50) -> dict:
+    """LLM-as-a-judge results on live answers: pass rates per evaluator plus the latest verdicts with reasons."""
+    from wellops.qa import judge
+    return {"summary": judge.summary(last), "judgments": judge.judgments(limit, verdict, evaluator)}
+
+
 @app.get("/api/health")
 def health() -> dict:
     n = get_db().rows("SELECT count(*) n FROM wells WHERE dataset_id=?", [settings.active_dataset])[0]["n"]
-    return {"ok": True, "dataset": settings.active_dataset, "wells": n, "harness": settings.harness, "model": __import__("wellops.api.turn_stream", fromlist=["MODEL"]).MODEL,
+    return {"ok": True, "dataset": settings.active_dataset, "clock_today": str(settings.clock_today), "wells": n, "harness": settings.harness, "model": __import__("wellops.api.turn_stream", fromlist=["MODEL"]).MODEL,
             "instance": INSTANCE}
 
 

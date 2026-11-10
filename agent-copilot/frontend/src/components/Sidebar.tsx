@@ -6,7 +6,7 @@ import { roleLabel, teamLabel } from "@/lib/format";
 export function Sidebar(p: {
   users: User[]; userId: string; onUser: (id: string) => void;
   chats: ChatSummary[]; chatId: string; onChat: (id: string) => void; onNew: () => void;
-  today: string; onToday: (d: string) => void; mock: boolean;
+  today: string; resetToday?: string; onToday: (d: string) => void; mock: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const me = p.users.find((u) => u.user_id === p.userId);
@@ -48,7 +48,7 @@ export function Sidebar(p: {
           className="w-full rounded-lg border border-line bg-panel px-3 py-1.5 text-sm" />
         <div className="mt-1 flex gap-1">
           <button type="button" onClick={() => p.onToday(addDays(p.today, 1))} className="rounded-md border border-line px-2 py-0.5 text-xs hover:border-accent">+1 day</button>
-          <button type="button" onClick={() => p.onToday("2026-10-17")} className="rounded-md border border-line px-2 py-0.5 text-xs hover:border-accent">Reset</button>
+          <button type="button" onClick={() => p.onToday(p.resetToday ?? "2026-10-17")} className="rounded-md border border-line px-2 py-0.5 text-xs hover:border-accent">Reset</button>
         </div>
       </section>
 

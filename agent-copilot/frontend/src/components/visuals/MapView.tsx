@@ -1,75 +1,76 @@
 "use client";
-import dynamic from "next/dynamic";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { VisualProps } from ".";
-import { fmtVal, num, titleCase, useWidth } from "@/lib/format";
+import { WellMap } from "./WellMap";
+import { asStrArr, fmtVal, num, titleCase } from "@/lib/format";
+import { convexHull, locLines, locStatus, padRing, useLocations, type MapPin, type WellLoc } from "@/lib/geo";
 
-export interface Pt { id: string; lat: number; lon: number; size: number; detail: string }
+const SKIP = /(^lat$|^lon$|_overlay$|^explanation$|^reason_summary$|note|^sql$|^span$|_user_id$|^delta_rule$)/;
+const BAD_STATUS = /not[ _]producing|^down$|shut|inactive|^false$/i;
 
-const GlMap = dynamic(() => import("./GlMap"), { ssr: false, loading: () => <div className="h-72 animate-pulse rounded-lg bg-raised" /> });
-
-export function MapView({ visual, data, rows }: VisualProps) {
-  const e = visual.encodings ?? {};
-  const latC = (typeof e.lat === "string" ? e.lat : "lat"), lonC = (typeof e.lon === "string" ? e.lon : "lon");
-  const sizeC = typeof e.size === "string" ? e.size : null;
-  const labelC = (typeof e.label === "string" ? e.label : data?.columns[0]) ?? "asset_id";
-  const pts: Pt[] = useMemo(() => rows.flatMap((r) => {
-    const lat = num(r[latC]), lon = num(r[lonC]);
-    if (lat === null || lon === null) return [];
-    const extra = (data?.columns ?? []).filter((c) => ![latC, lonC, labelC].includes(c)).map((c) => `${titleCase(c)}: ${fmtVal(r[c])}`).join(" · ");
-    return [{ id: String(r[labelC]), lat, lon, size: sizeC ? num(r[sizeC]) ?? 1 : 1, detail: extra }];
-  }), [rows, data, latC, lonC, sizeC, labelC]);
-  const [fallback, setFallback] = useState(typeof navigator !== "undefined" && navigator.onLine === false);
-  const [mode, setMode] = useState<"map" | "plot">(fallback ? "plot" : "map");
-  const onFail = useCallback(() => { setFallback(true); setMode("plot"); }, []);
-  const sizeLabel = sizeC ? titleCase(sizeC) : "";
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between text-xs text-muted">
-        <span>{pts.length} location{pts.length === 1 ? "" : "s"}{sizeLabel ? ` · bubble = ${sizeLabel}` : ""}</span>
-        <div role="group" aria-label="Map mode" className="flex overflow-hidden rounded-md border border-line">
-          {(["map", "plot"] as const).map((m) => (
-            <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}
-              className={`px-2 py-0.5 ${mode === m ? "bg-accent text-accent-fg" : "bg-panel hover:bg-raised"}`}>{m === "map" ? "Map" : "Lat/Lon plot"}</button>
-          ))}
-        </div>
-      </div>
-      {mode === "map" && !fallback
-        ? <GlMap pts={pts} onFail={onFail} />
-        : <SvgScatter pts={pts} />}
-      {fallback && <p className="mt-1 text-[11px] text-muted">Basemap unavailable (offline or no WebGL); showing a lat/lon plot.</p>}
-    </div>
-  );
+/** Row -> is this a problem item (not producing, or a real spill)? */
+function isBad(r: Record<string, unknown>, spillRows: boolean): boolean {
+  if (spillRows) return true;
+  if (r.producing === false || r.reportable === true) return true;
+  for (const c of ["status", "state", "effective_status"]) if (typeof r[c] === "string" && BAD_STATUS.test(r[c] as string)) return true;
+  return false;
 }
 
-export function SvgScatter({ pts }: { pts: Pt[] }) {
-  const [ref, width] = useWidth<HTMLDivElement>();
-  const [sel, setSel] = useState<string | null>(null);
-  const W = Math.max(width, 280), H = Math.min(320, Math.max(220, W * 0.62)), pad = { l: 56, r: 24, t: 16, b: 30 };
-  const lats = pts.map((p) => p.lat), lons = pts.map((p) => p.lon);
-  const latMid = (Math.min(...lats) + Math.max(...lats)) / 2, k = Math.cos((latMid * Math.PI) / 180);
-  const dLon = Math.max(Math.max(...lons) - Math.min(...lons), 1e-4) * k, dLat = Math.max(Math.max(...lats) - Math.min(...lats), 1e-4);
-  const scale = Math.min((W - pad.l - pad.r) / dLon, (H - pad.t - pad.b) / dLat);
-  const cx = (Math.min(...lons) + Math.max(...lons)) / 2, cy = (Math.min(...lats) + Math.max(...lats)) / 2;
-  const X = (lon: number) => W / 2 + (lon - cx) * k * scale, Y = (lat: number) => H / 2 - (lat - cy) * scale;
-  const maxS = Math.max(...pts.map((p) => p.size), 1);
-  const r = (s: number) => 7 + Math.sqrt(s / maxS) * 15;
-  const selected = pts.find((p) => p.id === sel);
-  return (
-    <div ref={ref} className="w-full">
-      {width > 0 && (
-        <svg width={W} height={H} role="img" aria-label="Scatter of locations by latitude and longitude" className="rounded-lg bg-raised">
-          {[0, 0.5, 1].map((t) => { const lat = cy + (0.5 - t) * ((H - pad.t - pad.b) / scale); return <g key={t}><line x1={pad.l} x2={W - pad.r} y1={Y(lat)} y2={Y(lat)} stroke="rgb(var(--line))" /><text x={pad.l - 6} y={Y(lat) + 4} textAnchor="end" fontSize={10} fill="rgb(var(--muted))">{lat.toFixed(3)}</text></g>; })}
-          {[0, 0.5, 1].map((t) => { const lon = cx + (t - 0.5) * ((W - pad.l - pad.r) / (scale * k)); return <g key={t}><line y1={pad.t} y2={H - pad.b} x1={X(lon)} x2={X(lon)} stroke="rgb(var(--line))" /><text x={X(lon)} y={H - 10} textAnchor="middle" fontSize={10} fill="rgb(var(--muted))">{lon.toFixed(3)}</text></g>; })}
-          {pts.map((p) => (
-            <g key={p.id} tabIndex={0} role="button" aria-label={`${p.id}: ${p.detail}`} onClick={() => setSel(p.id)} onKeyDown={(e) => e.key === "Enter" && setSel(p.id)} style={{ cursor: "pointer" }}>
-              <circle cx={X(p.lon)} cy={Y(p.lat)} r={r(p.size)} fill="rgb(var(--bad))" fillOpacity={0.35} stroke="rgb(var(--bad))" strokeWidth={sel === p.id ? 3 : 1.5} />
-              <text x={X(p.lon)} y={Y(p.lat) - r(p.size) - 4} textAnchor="middle" fontSize={11} fontWeight={600} fill="rgb(var(--fg))">{p.id}</text>
-            </g>
-          ))}
-        </svg>
-      )}
-      <p className="mt-1 min-h-4 text-xs text-muted">{selected ? `${selected.id} · ${selected.detail}` : "Select a point for details."}</p>
-    </div>
-  );
+/** Area outline + faded context pins for the area's other wells. */
+export function areaContext(areaLocs: WellLoc[] | null, exclude: Set<string>): { outline: [number, number][]; context: MapPin[] } {
+  if (!areaLocs?.length) return { outline: [], context: [] };
+  const outline = padRing(convexHull(areaLocs.map((l) => [l.lon, l.lat])), 0.1);
+  const context = areaLocs.filter((l) => !exclude.has(l.asset_id)).map((l): MapPin => ({ id: l.asset_id, lat: l.lat, lon: l.lon, tone: "faded", lines: locLines(l) }));
+  return { outline, context };
+}
+
+/** `map` visual (and the "Map" view of tables/bars): rows with lat/lon, or asset ids resolved via /api/wells/locations. */
+export function MapView({ visual, data, rows }: VisualProps) {
+  const e = visual.encodings ?? {};
+  const cols = useMemo(() => data?.columns ?? Object.keys(rows[0] ?? {}), [data, rows]);
+  const latC = typeof e.lat === "string" ? e.lat : "lat", lonC = typeof e.lon === "string" ? e.lon : "lon";
+  const idC = typeof e.label === "string" ? e.label : cols.includes("asset_id") ? "asset_id" : cols[0] ?? "asset_id";
+  const spillRows = data?.shape === "geo_points" || cols.includes("spill_class") || cols.includes("volume_bbl");
+  const sizeC = useMemo(() => {
+    if (typeof e.size === "string") return e.size;
+    if (cols.includes("volume_bbl")) return "volume_bbl";
+    const y = asStrArr(e.y)[0];
+    if (y && cols.includes(y)) return y;
+    if (data?.shape === "category_measure") return cols.find((c) => c !== idC && rows.some((r) => typeof r[c] === "number") && !/(^lat$|^lon$|_id$)/.test(c)) ?? null;
+    return null;
+  }, [e.size, e.y, cols, data?.shape, idC, rows]);
+  const ids = useMemo(() => [...new Set(rows.map((r) => r.asset_id).filter((x): x is string => typeof x === "string"))], [rows]);
+  const area = useMemo(() => {
+    if (typeof e.area === "string") return e.area;
+    const names = [...new Set(rows.map((r) => r.area ?? r.area_name).filter((x): x is string => typeof x === "string" && !!x))];
+    return names.length === 1 ? names[0] : null;
+  }, [e.area, rows]);
+  const locs = useLocations(ids);
+  const areaLocs = useLocations([], area);
+
+  const { pins, outline } = useMemo(() => {
+    const byId = new Map((locs ?? []).map((l) => [l.asset_id, l]));
+    const peak = sizeC && !spillRows && rows.length > 1 ? Math.max(...rows.map((r) => num(r[sizeC]) ?? -Infinity)) : null;
+    const shown = cols.filter((c) => c !== idC && !SKIP.test(c) && c !== "asset_id").slice(0, 5);
+    const main: MapPin[] = rows.flatMap((r) => {
+      const loc = typeof r.asset_id === "string" ? byId.get(r.asset_id) : undefined;
+      const lat = num(r[latC]) ?? loc?.lat ?? null, lon = num(r[lonC]) ?? loc?.lon ?? null;
+      if (lat === null || lon === null) return [];
+      const size = sizeC ? num(r[sizeC]) ?? 0 : undefined;
+      const bad = isBad(r, spillRows) || (!spillRows && loc && locStatus(loc) === "not producing" && !cols.some((c) => /status|producing/.test(c)));
+      const tone: MapPin["tone"] = peak !== null && size === peak ? "hl" : bad ? "bad" : rows.length === 1 ? "hl" : "ink";
+      const id = String(r[idC] ?? r.asset_id ?? "");
+      const rowLines = shown.map((c) => `${titleCase(c)}: ${fmtVal(r[c])}`).filter((l) => l.length < 80);
+      const extra = loc ? locLines(loc).filter((l) => !rowLines.some((x) => x.includes(l))) : [];
+      return [{ id, title: typeof r.asset_id === "string" && idC !== "asset_id" ? r.asset_id : id, lat, lon, tone, size, lines: [...(idC !== "asset_id" && typeof r.asset_id === "string" ? [r.asset_id] : []), ...rowLines, ...extra] }];
+    });
+    const ctx = areaContext(areaLocs, new Set(ids));
+    return { pins: [...ctx.context, ...main], outline: ctx.outline };
+  }, [rows, locs, areaLocs, ids, cols, idC, latC, lonC, sizeC, spillRows]);
+
+  const nMain = pins.filter((p) => p.tone !== "faded").length;
+  const needsLookup = rows.some((r) => num(r[latC]) === null) && locs === null;
+  if (needsLookup) return <div className="h-72 animate-pulse rounded-lg bg-raised" role="status" aria-label="Loading locations" />;
+  const caption = [`${nMain} location${nMain === 1 ? "" : "s"}`, sizeC ? `size = ${titleCase(sizeC)}` : "", area && outline.length ? `outline = ${area}` : ""].filter(Boolean).join(" · ");
+  return <WellMap pins={pins} outline={outline} caption={caption} ariaLabel={visual.title ?? "Map of well locations"} />;
 }

@@ -5,7 +5,7 @@
 - computed  : a derived or identity field (Δ, threshold, producing flag, timestamps) -> explained, nothing stored
 - applied   : valid and justified ("the gun was faulty; re-measured at 41.0 °C") -> stored now, attributed, original
               kept, undoable (what the evaluation spec asks for)
-- pending   : valid but unjustified ("this is wrong, change it to 22.6") -> proof card, stored only if the user confirms
+- pending   : (only with settings.feedback_commits off) valid but unjustified ("this is wrong, change it to 22.6") -> proof card, stored only if the user confirms
 - claim     : a status statement ("it is producing") -> stored as a claim, confirmed or unconfirmed against the data
 The answer always carries the evidence (raw record, author, method, rule, nearby notes, earlier corrections) and the
 conflicts the change creates, so the user can judge whether the data or the correction is right.
@@ -21,6 +21,8 @@ from typing import Any
 
 from wellops.contracts import AssertionIn, RunDeps
 from wellops.tools.core import ToolError, get_db, lit, mac, user_names
+
+from wellops.settings import settings
 
 from .constraints import check, column
 
@@ -116,6 +118,7 @@ def propose_correction(deps: RunDeps, record_id: str, changes: dict[str, Any], r
     rid = _resolve_record(db, deps, record_id, date)
     i, raw, ev = evidence(db, deps, rid)
     justified = bool(reason and JUSTIFIED.search(reason))
+    commit = justified or settings.feedback_commits  # the user's explicit correction is stored now (attributed, undoable)
     rows, conflicts, effects = [], [], []
     for name, proposed in changes.items():
         col, val, err = check(name, proposed)
@@ -134,7 +137,7 @@ def propose_correction(deps: RunDeps, record_id: str, changes: dict[str, Any], r
             row.update(status="computed" if meta and meta.kind in ("derived", "identity", "rule") else "rejected", reason=err)
         elif val == row["current"] or (isinstance(val, float) and isinstance(row["current"], (int, float)) and abs(val - row["current"]) < 1e-9):
             row.update(status="unchanged", reason="already the value on record")
-        elif justified:
+        elif commit:
             r = _store(deps, rid, i["asset_id"], col, val, reason or "")
             row.update(status="applied", proposed=val, assertion_id=r["assertion_id"])
             conflicts += r["conflicts"]

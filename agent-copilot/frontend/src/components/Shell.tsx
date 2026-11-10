@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatSummary, User } from "@/contracts";
-import { DEFAULT_TODAY, MOCK, fetchChats, fetchHandle, fetchUsers, ingestFile, type Ctx } from "@/lib/api";
+import { API_BASE, DEFAULT_TODAY, MOCK, fetchChats, fetchHandle, fetchUsers, ingestFile, type Ctx } from "@/lib/api";
 import { uid } from "@/lib/agui";
 import { useChat } from "@/lib/chat";
 import { SCENARIOS } from "@/mock/fixtures";
@@ -15,7 +15,8 @@ import { CompareDock } from "@/components/CompareDock";
 import { CanvasModal } from "@/components/Board";
 import { CanvasToast } from "@/components/CanvasMenu";
 import { viewsFor } from "@/components/visuals/Interactive";
-import { chartIntent, setCanvasOpen, setViewOverride, useBoard, viewKey } from "@/lib/board";
+import { setCurrentCanvas } from "@/lib/canvases";
+import { chartIntent, setBoardUser, setCanvasOpen, setViewOverride, useBoard, viewKey } from "@/lib/board";
 import { titleCase } from "@/lib/format";
 import { MicButton, SpeakButton, VoiceToggle } from "@/components/Voice";
 import { firstSentences, speak, stopSpeaking, useDictation } from "@/lib/voice";
@@ -30,6 +31,7 @@ export function Shell() {
   const [users, setUsers] = useState<User[]>([]);
   const [userId, setUserId] = useState("U-201");
   const [today, setToday] = useState(DEFAULT_TODAY);
+  const [serverToday, setServerToday] = useState(DEFAULT_TODAY);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [chatId, setChatId] = useState(() => newChatId());
   const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
@@ -47,15 +49,23 @@ export function Shell() {
   const bottom = useRef<HTMLDivElement>(null);
 
   const ctx: Ctx = useMemo(() => ({ userId, chatId, today }), [userId, chatId, today]);
-  const { turns, busy, send, stop, addLocal } = useChat(ctx);
+  const { turns, turnsChat, busy, send, stop, addLocal } = useChat(ctx);
   const boardCount = useBoard().length;
 
   // restore preferences
   useEffect(() => {
     const t = ls.get("wellops.theme") as "light" | "dark" | null; if (t) setTheme(t);
     const d = ls.get("wellops.today"); if (d) setToday(d);
+    // the backend's dataset decides "today": a new dataset (e.g. test data, today = 2027-01-15) resets the clock
+    fetch(`${API_BASE}/api/health`).then((r) => r.json()).then((h: { dataset?: string; clock_today?: string }) => {
+      if (!h.clock_today) return;
+      setServerToday(h.clock_today);
+      if (ls.get("wellops.dataset") !== h.dataset || !d) { setToday(h.clock_today); ls.set("wellops.today", h.clock_today); }
+      ls.set("wellops.dataset", h.dataset ?? "");
+    }).catch(() => { /* offline: keep the stored clock */ });
     const u = ls.get("wellops.user"); if (u) setUserId(u);
   }, []);
+  useEffect(() => { setBoardUser(userId); setCurrentCanvas(null); }, [userId]); // each user has their own canvas
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
     ls.set("wellops.theme", theme);
@@ -68,15 +78,30 @@ export function Shell() {
     try { local = JSON.parse(ls.get(registryKey) ?? "[]") as ChatSummary[]; } catch { /* ignore */ }
     let remote: ChatSummary[] = [];
     try { remote = await fetchChats(userId); } catch { /* backend offline: local only */ }
-    const map = new Map<string, ChatSummary>();
-    [...remote, ...local].forEach((c) => map.set(c.chat_id, { ...map.get(c.chat_id), ...c }));
-    const all = [...map.values()].sort((a, b) => String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")));
+    // chats used in this browser first, in the order last used (their times are real); then the server's other chats
+    // (their times follow the simulated clock, so they cannot be compared with real ones)
+    const seen = new Set(local.map((c) => c.chat_id));
+    const byId = new Map(remote.map((c) => [c.chat_id, c]));
+    const rest = remote.filter((c) => !seen.has(c.chat_id))
+      .sort((a, b) => (Date.parse(String(b.updated_at ?? "")) || 0) - (Date.parse(String(a.updated_at ?? "")) || 0));
+    const all = [...local.map((c) => ({ ...byId.get(c.chat_id), ...c })), ...rest];
     setChats(all); return all;
   }, [userId, registryKey]);
-  useEffect(() => { loadChats().then((all) => { if (all[0]) setChatId(all[0].chat_id); else setChatId(newChatId()); }); }, [loadChats]);
+  // On load / user switch: reopen the chat this user had open (refresh stays put); only the latest request wins.
+  const loadSeq = useRef(0);
+  useEffect(() => {
+    const seq = ++loadSeq.current;
+    loadChats().then((all) => {
+      if (seq !== loadSeq.current) return; // a newer user switch is in flight
+      const last = ls.get(`wellops.chat.${userId}`);
+      const id = last ?? all[0]?.chat_id ?? newChatId();
+      setChatId(id); ls.set(`wellops.chat.${userId}`, id);
+    });
+  }, [loadChats, userId]);
+  const openChat = (id: string) => { setChatId(id); ls.set(`wellops.chat.${userId}`, id); setLeftOpen(false); };
 
   // register chat in the local list once it has a first turn
-  const firstText = turns[0]?.userText;
+  const firstText = turnsChat === chatId ? turns[0]?.userText : undefined; // never the previous chat's question
   useEffect(() => {
     if (!firstText) return;
     setChats((prev) => {
@@ -146,8 +171,8 @@ export function Shell() {
 
   const switchUser = (id: string) => { setUserId(id); ls.set("wellops.user", id); setLeftOpen(false); };
   const sidebar = (
-    <Sidebar users={users} userId={userId} onUser={switchUser} chats={chats} chatId={chatId} onChat={(id) => { setChatId(id); setLeftOpen(false); }}
-      onNew={() => { setChatId(newChatId()); setLeftOpen(false); }} today={today} onToday={(d) => { setToday(d); ls.set("wellops.today", d); }} mock={MOCK} />
+    <Sidebar users={users} userId={userId} onUser={switchUser} chats={chats} chatId={chatId} onChat={openChat}
+      onNew={() => openChat(newChatId())} today={today} resetToday={serverToday} onToday={(d) => { setToday(d); ls.set("wellops.today", d); }} mock={MOCK} />
   );
   const xray = <XrayPanel turns={turns} selected={selTurn} onSelect={setSelTurn} />;
 

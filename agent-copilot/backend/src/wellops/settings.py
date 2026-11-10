@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     skills_llm_polish: bool = False  # optional Gemini rewrite of auto-skill name/description (never in tests)
     skills_llm_model: str = "gemini-3.5-flash-lite"
     self_url: str = "http://127.0.0.1:8000"  # where this API (and its /mcp) is reachable from local agents
+    judge_enabled: bool = True  # LLM-as-a-judge on every live answer (wellops.qa.judge); no-op without GEMINI_API_KEY
+    judge_mode: str = "async"  # async: background, never blocks | blocking: awaited, a FAIL re-asks once
+    judge_model: str = "gemini-4-argon"  # stronger than the agent's model
+    judge_fallbacks: str = "gemini-3.1-pro-preview,gemini-3.8-flash"  # tried in order if the judge model is unavailable
+    judge_timeout_s: float = 60.0
+    langfuse_public_key: str = ""  # optional trace export (one trace per turn + judge scores); no-op when unset
+    langfuse_secret_key: str = ""
+    langfuse_host: str = ""
+    feedback_commits: bool = True  # a user's correction ("no, there was no spill") is written to the DB at once
     harness: str = "native"  # native (Gemini agent over the WellOps tool registry) | pydantic (legacy test agent)
     opik_workspace: str = ""
     opik_project_name: str = "wellops"

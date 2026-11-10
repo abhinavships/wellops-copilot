@@ -14,7 +14,9 @@ export interface BoardCard {
   added: number;
 }
 
-const KEY = "wellops.board";
+const BASE = "wellops.board";
+const initialUser = () => { try { return localStorage.getItem("wellops.user") ?? "U-201"; } catch { return "U-201"; } };
+let KEY = ""; // set on first load from the remembered user; per user: `wellops.board.<userId>` (one user's canvas never shows for another)
 const W = 460, H = 340, GAP = 20;
 let cards: BoardCard[] = [];
 let loaded = false;
@@ -23,6 +25,7 @@ const subs = new Set<() => void>();
 function load() {
   if (loaded || typeof window === "undefined") return;
   loaded = true;
+  if (!KEY) KEY = `${BASE}.${initialUser()}`;
   try { cards = JSON.parse(localStorage.getItem(KEY) ?? "[]") as BoardCard[]; } catch { cards = []; }
 }
 function save(next: BoardCard[]) {
@@ -43,6 +46,17 @@ function freeSpot(w: number, h: number, width: number): { x: number; y: number }
       if (!cards.some((c) => overlaps(p, c))) return p;
     }
   return { x: GAP, y: GAP };
+}
+
+/** Switch the board to this user's saved cards (call on user change). */
+export function setBoardUser(userId: string) {
+  const k = `${BASE}.${userId}`;
+  if (k === KEY && loaded) return;
+  KEY = k;
+  loaded = false;
+  cards = [];
+  load();
+  subs.forEach((f) => f());
 }
 
 let boardWidth = 1000;

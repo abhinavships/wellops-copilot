@@ -31,7 +31,7 @@ from wellops.settings import ROOT, settings
 from wellops.substrate.ingest import manual_rules, split_sections
 from wellops.tools.core import Db, get_db, jsonable
 
-DS = "sample"
+DS = settings.active_dataset  # uploads join the dataset being served
 UPLOADS = ROOT / "backend" / "uploads"
 WELL_RE = re.compile(r"WELL-\d{4}", re.I)
 TABLE_EXT = {".csv", ".tsv", ".xlsx", ".json", ".jsonl", ".ndjson"}

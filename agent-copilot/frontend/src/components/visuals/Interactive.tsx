@@ -13,6 +13,13 @@ const ID_COLS: [string, CitationKind][] = [["inspection_id", "inspection"], ["ma
 
 /** Chart types a card may switch between, from the visual and the result shape. */
 export function viewsFor(visual: Visual, data: HandleData | null): string[] {
+  const views = withMap(baseViews(visual, data), visual, data);
+  // the user asked for a map ("show all wells on a map") but the figure came back as a table: open on the map
+  if (views.includes("map") && views[0] !== "map" && /\bmap\b/i.test(visual.title ?? "")) return ["map", ...views.filter((v) => v !== "map")];
+  return views;
+}
+
+function baseViews(visual: Visual, data: HandleData | null): string[] {
   const shape = data?.shape;
   if (visual.type === "heatmap" || shape === "matrix") return ["heatmap", "table"];
   if (["bar", "line"].includes(visual.type) || shape === "category_measure" || shape === "timeseries") {
@@ -20,6 +27,20 @@ export function viewsFor(visual: Visual, data: HandleData | null): string[] {
     return [first, first === "line" ? "bar" : "line", "table"];
   }
   return data && visual.type !== "table" ? [visual.type, "table"] : [visual.type];
+}
+
+/** Rows that are places (lat/lon, or well ids we can look up) can also be shown on the map. Timeseries of one well
+ * and matrices are not places; a status card already carries its own location mini-map. */
+export function hasPlaces(data: HandleData | null): boolean {
+  if (!data || !data.rows?.length || data.shape === "timeseries" || data.shape === "matrix") return false;
+  const c = data.columns;
+  return (c.includes("lat") && c.includes("lon")) || c.includes("asset_id");
+}
+
+function withMap(views: string[], visual: Visual, data: HandleData | null): string[] {
+  if (views.includes("map") || !["table", "bar", "line", "map"].some((v) => views.includes(v))) return views;
+  if (["status_card", "evidence_chain", "correction_diff", "conflict_card", "obligation_timeline", "sources", "dispute"].includes(visual.type)) return views;
+  return hasPlaces(data) ? [...views, "map"] : views;
 }
 
 /** Evidence for one row: its own record when it has an id column, else the row itself as a grounded value. */
@@ -107,7 +128,8 @@ export function SwitchableVisual(props: VisualProps & { view: string }) {
   const { view, visual } = props;
   if (view === "bar" || view === "line") return <InteractiveChart {...props} />;
   const Comp = VISUALS[view as Visual["type"]] ?? VISUALS[visual.type];
-  const v = view === "table" && visual.type !== "table" ? { ...visual, type: "table" as const, encodings: {} } : visual;
+  const v = view === "table" && visual.type !== "table" ? { ...visual, type: "table" as const, encodings: {} }
+    : view === "map" && visual.type !== "map" ? { ...visual, type: "map" as const } : visual;
   return Comp ? <Comp {...props} visual={v} /> : <p className="text-sm text-muted">No renderer for {view}.</p>;
 }
 
@@ -115,7 +137,7 @@ export function ViewSwitcher({ views, view, onView }: { views: string[]; view: s
   if (views.length < 2) return null;
   return (
     <span role="group" aria-label="Chart type" className="inline-flex rounded-md border border-line bg-bg p-0.5" onPointerDown={(e) => e.stopPropagation()}>
-      {views.map((v) => <Toggle key={v} on={v === view} onClick={() => onView(v)}>{titleCase(v)}</Toggle>)}
+      {views.map((v) => <Toggle key={v} on={v === view} onClick={() => onView(v)} title={v === "map" ? "Show on map" : undefined}>{v === "map" ? "◎ Map" : titleCase(v)}</Toggle>)}
     </span>
   );
 }

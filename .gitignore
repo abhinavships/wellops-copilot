@@ -12,3 +12,7 @@ node_modules/
 **/.tts_cache/
 agent-copilot/backend/uploads/
 **/cache.sqlite*
+
+# local backups / tooling (may hold real keys)
+*.bak
+.claude/

@@ -45,9 +45,9 @@ export function CitationChip({ c }: { c: Citation }) {
 
 export function stateTone(s: string): Tone {
   const x = s.toLowerCase();
-  if (/(breach|overdue|fail|bad|not producing|shut)/.test(x)) return "bad";
+  if (/(breach|overdue|fail|bad|not producing|shut|miss|expired|not approved)/.test(x)) return "bad";
   if (/(pending|no response|no_response|stale|unconfirmed|warn|disputed)/.test(x)) return "warn";
-  if (/(ok|met|producing|pass|confirmed|done)/.test(x)) return "ok";
+  if (/(ok|met|producing|pass|confirmed|done|allowed)/.test(x)) return "ok";
   return "neutral";
 }
 
